@@ -55,8 +55,10 @@ Dependencies/
 
 # Build artifacts and local builds
 build/
+dist/
 *.xcframework/
 *.log
+*.dmg
 exportOptions.plist
 
 # fastlane
