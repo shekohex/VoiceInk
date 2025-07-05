@@ -14,6 +14,8 @@ struct SettingsView: View {
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @ObservedObject private var mediaController = MediaController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
+    @AppStorage("isFallbackWindowEnabled") private var isFallbackWindowEnabled = true
+    @AppStorage("IsTextFormattingEnabled") private var isTextFormattingEnabled = true
     @State private var showResetOnboardingAlert = false
     @State private var currentShortcut = KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder)
     
@@ -73,7 +75,7 @@ struct SettingsView: View {
                 SettingsSection(
                     icon: "speaker.wave.2.bubble.left.fill",
                     title: "Recording Feedback",
-                    subtitle: "Customize audio and system feedback"
+                    subtitle: "Customize app & system feedback"
                 ) {
                     VStack(alignment: .leading, spacing: 12) {
                         Toggle(isOn: $whisperState.isAutoCopyEnabled) {
@@ -94,6 +96,18 @@ struct SettingsView: View {
                         }
                         .toggleStyle(.switch)
                         .help("Automatically mute system audio when recording starts and restore when recording stops")
+
+                        Toggle(isOn: $isFallbackWindowEnabled) {
+                            Text("Show fallback window when paste fails")
+                        }
+                        .toggleStyle(.switch)
+                        .help("Display a fallback window with the transcribed text when automatic pasting is not possible")
+                        
+                        Toggle(isOn: $isTextFormattingEnabled) {
+                            Text("Automatic text formatting")
+                        }
+                        .toggleStyle(.switch)
+                        .help("Apply intelligent text formatting with proper paragraphs and sentence structure to transcribed text")
                     }
                 }
 

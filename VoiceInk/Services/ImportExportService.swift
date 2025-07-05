@@ -18,6 +18,8 @@ struct GeneralSettings: Codable {
     let isAutoCopyEnabled: Bool?
     let isSoundFeedbackEnabled: Bool?
     let isSystemMuteEnabled: Bool?
+    let isFallbackWindowEnabled: Bool?
+    let isTextFormattingEnabled: Bool?
 }
 
 struct VoiceInkExportedSettings: Codable {
@@ -47,6 +49,7 @@ class ImportExportService {
     private let keyIsAutoCopyEnabled = "IsAutoCopyEnabled"
     private let keyIsSoundFeedbackEnabled = "isSoundFeedbackEnabled"
     private let keyIsSystemMuteEnabled = "isSystemMuteEnabled"
+    private let keyIsTextFormattingEnabled = "IsTextFormattingEnabled"
 
     private init() {
         if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
@@ -90,7 +93,9 @@ class ImportExportService {
             audioRetentionPeriod: UserDefaults.standard.integer(forKey: keyAudioRetentionPeriod),
             isAutoCopyEnabled: whisperState.isAutoCopyEnabled,
             isSoundFeedbackEnabled: soundManager.isEnabled,
-            isSystemMuteEnabled: mediaController.isSystemMuteEnabled
+            isSystemMuteEnabled: mediaController.isSystemMuteEnabled,
+            isFallbackWindowEnabled: UserDefaults.standard.object(forKey: "isFallbackWindowEnabled") == nil ? true : UserDefaults.standard.bool(forKey: "isFallbackWindowEnabled"),
+            isTextFormattingEnabled: UserDefaults.standard.object(forKey: keyIsTextFormattingEnabled) as? Bool ?? true
         )
 
         let exportedSettings = VoiceInkExportedSettings(
@@ -244,6 +249,12 @@ class ImportExportService {
                         }
                         if let muteSystem = general.isSystemMuteEnabled {
                             mediaController.isSystemMuteEnabled = muteSystem
+                        }
+                        if let fallbackEnabled = general.isFallbackWindowEnabled {
+                            UserDefaults.standard.set(fallbackEnabled, forKey: "isFallbackWindowEnabled")
+                        }
+                        if let textFormattingEnabled = general.isTextFormattingEnabled {
+                            UserDefaults.standard.set(textFormattingEnabled, forKey: self.keyIsTextFormattingEnabled)
                         }
                     }
 
