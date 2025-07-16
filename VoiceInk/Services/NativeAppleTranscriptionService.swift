@@ -9,6 +9,10 @@ import Speech
 /// Transcription service that leverages the new SpeechAnalyzer / SpeechTranscriber API available on macOS 26 (Tahoe).
 /// Falls back with an unsupported-provider error on earlier OS versions so the application can gracefully degrade.
 class NativeAppleTranscriptionService: TranscriptionService {
+    func transcribe(audioURL: URL, model: any TranscriptionModel) async throws -> String {
+        throw ServiceError.unsupportedOS;
+    }
+    
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "NativeAppleTranscriptionService")
     
     /// Maps simple language codes to Apple's BCP-47 locale format
@@ -51,6 +55,8 @@ class NativeAppleTranscriptionService: TranscriptionService {
             }
         }
     }
+    
+#if false
 
     func transcribe(audioURL: URL, model: any TranscriptionModel) async throws -> String {
         guard model is NativeAppleModel else {
@@ -185,4 +191,5 @@ class NativeAppleTranscriptionService: TranscriptionService {
         }
         #endif
     }
-} 
+#endif
+}
