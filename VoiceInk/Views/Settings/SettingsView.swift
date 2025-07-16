@@ -14,10 +14,9 @@ struct SettingsView: View {
     @StateObject private var deviceManager = AudioDeviceManager.shared
     @ObservedObject private var mediaController = MediaController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
-    @AppStorage("isFallbackWindowEnabled") private var isFallbackWindowEnabled = true
-    @AppStorage("IsTextFormattingEnabled") private var isTextFormattingEnabled = true
     @State private var showResetOnboardingAlert = false
     @State private var currentShortcut = KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder)
+    @State private var isCustomCancelEnabled = false
     
     var body: some View {
         ScrollView {
@@ -62,8 +61,42 @@ struct SettingsView: View {
                                 .foregroundColor(.accentColor)
                             }
                         }
-                        
+
                         Text("Quick tap to start hands-free recording (tap again to stop). Press and hold for push-to-talk (release to stop recording).")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        // Cancel Recording Override Toggle
+                        Toggle(isOn: $isCustomCancelEnabled) {
+                            Text("Override default double-tap Escape cancellation")
+                        }
+                        .toggleStyle(.switch)
+                        .onChange(of: isCustomCancelEnabled) { _, newValue in
+                            if !newValue {
+                                KeyboardShortcuts.setShortcut(nil, for: .cancelRecorder)
+                            }
+                        }
+                        
+                        // Show shortcut recorder only when override is enabled
+                        if isCustomCancelEnabled {
+                            HStack(spacing: 12) {
+                                Text("Custom Cancel Shortcut")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                
+                                KeyboardShortcuts.Recorder(for: .cancelRecorder)
+                                    .controlSize(.small)
+                                
+                                Spacer()
+                            }
+                            .padding(.leading, 16)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+
+                        Text("By default, double-tap Escape to cancel recordings. Enable override above for single-press custom cancellation (useful for Vim users).")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -96,18 +129,6 @@ struct SettingsView: View {
                         }
                         .toggleStyle(.switch)
                         .help("Automatically mute system audio when recording starts and restore when recording stops")
-
-                        Toggle(isOn: $isFallbackWindowEnabled) {
-                            Text("Show fallback window when paste fails")
-                        }
-                        .toggleStyle(.switch)
-                        .help("Display a fallback window with the transcribed text when automatic pasting is not possible")
-                        
-                        Toggle(isOn: $isTextFormattingEnabled) {
-                            Text("Automatic text formatting")
-                        }
-                        .toggleStyle(.switch)
-                        .help("Apply intelligent text formatting with proper paragraphs and sentence structure to transcribed text")
                     }
                 }
 
@@ -274,6 +295,10 @@ struct SettingsView: View {
             .padding(.vertical, 6)
         }
         .background(Color(NSColor.controlBackgroundColor))
+        .onAppear {
+            // Initialize custom cancel shortcut state from stored preferences
+            isCustomCancelEnabled = KeyboardShortcuts.getShortcut(for: .cancelRecorder) != nil
+        }
         .alert("Reset Onboarding", isPresented: $showResetOnboardingAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {

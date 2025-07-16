@@ -57,19 +57,11 @@ class NativeAppleTranscriptionService: TranscriptionService {
             throw ServiceError.invalidModel
         }
         
-        // Always throw unsupported OS error since macOS 26 APIs are not available
-        logger.error("SpeechAnalyzer is not available on this macOS version (requires macOS 26)")
-        throw ServiceError.unsupportedOS
-        
-        // All macOS 26 specific code is disabled at compile time
-        #if false
-        // This code would only compile on macOS 26 or later
         guard #available(macOS 26, *) else {
             logger.error("SpeechAnalyzer is not available on this macOS version")
             throw ServiceError.unsupportedOS
         }
         
-        #if canImport(Speech) && compiler(>=6.0) && swift(>=6.0)
         logger.notice("Starting Apple native transcription with SpeechAnalyzer.")
         
         let audioFile = try AVAudioFile(forReading: audioURL)
@@ -148,16 +140,8 @@ class NativeAppleTranscriptionService: TranscriptionService {
         
         logger.notice("Native transcription successful. Length: \(finalTranscription.count) characters.")
         return finalTranscription
-        
-        #else
-        logger.error("SpeechTranscriber is not available in this compiler version or Speech framework is not available")
-        throw ServiceError.unsupportedOS
-        #endif
-        #endif
     }
     
-    // All helper methods are disabled at compile time since they use macOS 26 APIs
-    #if compiler(>=6.0) && swift(>=6.0)
     @available(macOS 26, *)
     private func deallocateExistingAssets() async throws {
         #if canImport(Speech)
@@ -168,9 +152,7 @@ class NativeAppleTranscriptionService: TranscriptionService {
         logger.notice("Deallocated existing asset locales.")
         #endif
     }
-    #endif
     
-    #if compiler(>=6.0) && swift(>=6.0)
     @available(macOS 26, *)
     private func allocateAssetsForLocale(_ locale: Locale) async throws {
         #if canImport(Speech)
@@ -183,9 +165,7 @@ class NativeAppleTranscriptionService: TranscriptionService {
         }
         #endif
     }
-    #endif
     
-    #if compiler(>=6.0) && swift(>=6.0)
     @available(macOS 26, *)
     private func ensureModelIsAvailable(for transcriber: SpeechTranscriber, locale: Locale) async throws {
         #if canImport(Speech)
@@ -205,5 +185,4 @@ class NativeAppleTranscriptionService: TranscriptionService {
         }
         #endif
     }
-    #endif
 } 

@@ -36,7 +36,7 @@ extension WhisperState {
     
     func toggleMiniRecorder() async {
         if isMiniRecorderVisible {
-            if isRecording {
+            if recordingState == .recording {
                 await toggleRecord()
             } else {
                 await cancelRecording()
@@ -53,32 +53,32 @@ extension WhisperState {
     }
     
     func dismissMiniRecorder() async {
+        if recordingState == .busy { return }
+        
+        let wasRecording = recordingState == .recording
+        
         logger.notice("📱 Dismissing \(self.recorderType) recorder")
         
         await MainActor.run {
+            self.recordingState = .busy
             NotificationManager.shared.dismissNotification()
         }
         
-        shouldCancelRecording = true
-
-        if isRecording {
+        if wasRecording {
             await recorder.stopRecording()
         }
-
-        // Hide recorder panel first before doing anything else
+        
         hideRecorderPanel()
         
         await MainActor.run {
-            isRecording = false
-            isVisualizerActive = false
-            isProcessing = false
-            isTranscribing = false
-            canTranscribe = true
             isMiniRecorderVisible = false
         }
-
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        
         await cleanupModelResources()
+        
+        await MainActor.run {
+            recordingState = .idle
+        }
     }
     
     func cancelRecording() async {

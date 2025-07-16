@@ -52,7 +52,7 @@ enum AIProvider: String, CaseIterable {
         case .deepSeek:
             return "deepseek-chat"
         case .gemini:
-            return "gemini-2.5-pro"
+            return "gemini-2.0-flash-lite"
         case .anthropic:
             return "claude-sonnet-4-0"
         case .mistral:
@@ -75,7 +75,9 @@ enum AIProvider: String, CaseIterable {
         case .groq:
             return [
                 "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant"
+                "llama-3.1-8b-instant",
+                "qwen/qwen3-32b",
+                "meta-llama/llama-4-maverick-17b-128e-instruct"
             ]
         case .openAI:
             return [
@@ -410,23 +412,20 @@ class AIService: ObservableObject {
     
     private func verifyElevenLabsAPIKey(_ key: String, completion: @escaping (Bool) -> Void) {
         let url = URL(string: "https://api.elevenlabs.io/v1/user")!
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue(key, forHTTPHeaderField: "xi-api-key")
-        
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            if let error = error {
-                self.logger.error("ElevenLabs API key verification failed: \(error.localizedDescription)")
-                completion(false)
-                return
+
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            let isValid = (response as? HTTPURLResponse)?.statusCode == 200
+
+            if let data = data, let body = String(data: data, encoding: .utf8) {
+                self.logger.info("ElevenLabs verification response: \(body)")
             }
-            
-            if let httpResponse = response as? HTTPURLResponse {
-                completion(httpResponse.statusCode == 200)
-            } else {
-                completion(false)
-            }
+
+            completion(isValid)
         }.resume()
     }
     
