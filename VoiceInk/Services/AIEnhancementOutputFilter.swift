@@ -1,25 +1,21 @@
 import Foundation
 
 struct AIEnhancementOutputFilter {
-    private static let reasoningPatterns = [
-        #"(?s)<think>.*?</think>"#,
-        #"(?s)<reasoning>.*?</reasoning>"#,
-        #"(?s)<analysis>.*?</analysis>"#,
-    ]
-    
     static func filter(_ text: String) -> String {
-        var filteredText = text
-        
-        for pattern in reasoningPatterns {
+        var processedText = text
+        let patterns = [
+            #"(?s)<thinking>(.*?)</thinking>"#,
+            #"(?s)<think>(.*?)</think>"#,
+            #"(?s)<reasoning>(.*?)</reasoning>"#
+        ]
+
+        for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(filteredText.startIndex..., in: filteredText)
-                filteredText = regex.stringByReplacingMatches(in: filteredText, options: [], range: range, withTemplate: "")
+                let range = NSRange(processedText.startIndex..., in: processedText)
+                processedText = regex.stringByReplacingMatches(in: processedText, options: [], range: range, withTemplate: "")
             }
         }
         
-        filteredText = filteredText.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-        filteredText = filteredText.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        return filteredText
+        return processedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 } 

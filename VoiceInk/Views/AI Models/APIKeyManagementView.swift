@@ -250,14 +250,14 @@ struct APIKeyManagementView: View {
                     // Configuration Fields
                     VStack(alignment: .leading, spacing: 8) {
                         if !aiService.isAPIKeyValid {
-                            TextField("Base URL (e.g., https://api.example.com/v1/chat/completions)", text: $aiService.customBaseURL)
+                            TextField("API Endpoint URL (e.g., https://api.example.com/v1/chat/completions)", text: $aiService.customBaseURL)
                                 .textFieldStyle(.roundedBorder)
                             
                             TextField("Model Name (e.g., gpt-4o-mini, claude-3-5-sonnet-20240620)", text: $aiService.customModel)
                                 .textFieldStyle(.roundedBorder)
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Base URL")
+                                Text("API Endpoint URL")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 Text(aiService.customBaseURL)
@@ -393,7 +393,7 @@ struct APIKeyManagementView: View {
                             Spacer()
                             
                             HStack(spacing: 8) {
-                                Text(aiService.selectedProvider == .groq || aiService.selectedProvider == .gemini ? "Free" : "Paid")
+                                Text((aiService.selectedProvider == .groq || aiService.selectedProvider == .gemini || aiService.selectedProvider == .cerebras) ? "Free" : "Paid")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 6)
@@ -408,8 +408,6 @@ struct APIKeyManagementView: View {
                                             URL(string: "https://console.groq.com/keys")!
                                         case .openAI:
                                             URL(string: "https://platform.openai.com/api-keys")!
-                                        case .deepSeek:
-                                            URL(string: "https://platform.deepseek.com/api-keys")!
                                         case .gemini:
                                             URL(string: "https://makersuite.google.com/app/apikey")!
                                         case .anthropic:
@@ -424,6 +422,8 @@ struct APIKeyManagementView: View {
                                             URL(string: "")! // This case should never be reached
                                         case .openRouter:
                                             URL(string: "https://openrouter.ai/keys")!
+                                        case .cerebras:
+                                            URL(string: "https://cloud.cerebras.ai/")!
                                         }
                                         NSWorkspace.shared.open(url)
                                     } label: {

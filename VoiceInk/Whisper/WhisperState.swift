@@ -294,7 +294,7 @@ class WhisperState: NSObject, ObservableObject {
                     let newTranscription = Transcription(
                         text: originalText,
                         duration: actualDuration,
-                        enhancedText: "Enhancement failed: \(error.localizedDescription)",
+                        enhancedText: "Enhancement failed: \(error)",
                         audioFileURL: url.absoluteString,
                         transcriptionModelName: model.displayName,
                         transcriptionDuration: transcriptionDuration
@@ -339,6 +339,15 @@ class WhisperState: NSObject, ObservableObject {
                 
                 if self.isAutoCopyEnabled {
                     ClipboardManager.copyToClipboard(text)
+                }
+
+                // Automatically press Enter if the active Power Mode configuration allows it.
+                let powerMode = PowerModeManager.shared
+                if powerMode.isPowerModeEnabled && powerMode.currentActiveConfiguration.isAutoSendEnabled {
+                    // Slight delay to ensure the paste operation completes
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        CursorPaster.pressEnter()
+                    }
                 }
             }
             

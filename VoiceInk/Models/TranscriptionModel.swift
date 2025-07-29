@@ -6,6 +6,7 @@ enum ModelProvider: String, Codable, Hashable, CaseIterable {
     case groq = "Groq"
     case elevenLabs = "ElevenLabs"
     case deepgram = "Deepgram"
+    case mistral = "Mistral"
     case custom = "Custom"
     case nativeApple = "Native Apple"
     // Future providers can be added here
@@ -93,5 +94,30 @@ struct CustomCloudModel: TranscriptionModel, Codable {
         self.modelName = modelName
         self.isMultilingualModel = isMultilingual
         self.supportedLanguages = supportedLanguages ?? PredefinedModels.getLanguageDictionary(isMultilingual: isMultilingual)
+    }
+} 
+
+struct LocalModel: TranscriptionModel {
+    let id = UUID()
+    let name: String
+    let displayName: String
+    let size: String
+    let supportedLanguages: [String: String]
+    let description: String
+    let speed: Double
+    let accuracy: Double
+    let ramUsage: Double
+    let provider: ModelProvider = .local
+
+    var downloadURL: String {
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/\(filename)"
+    }
+
+    var filename: String {
+        "\(name).bin"
+    }
+
+    var isMultilingualModel: Bool {
+        supportedLanguages.count > 1
     }
 } 
