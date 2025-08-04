@@ -76,7 +76,7 @@ enum AIProvider: String, CaseIterable {
                 "llama-4-scout-17b-16e-instruct",
                 "llama-3.3-70b",
                 "qwen-3-32b",
-                "qwen-3-235b-a22b"
+                "qwen-3-235b-a22b-instruct-2507"
             ]
         case .groq:
             return [
@@ -89,6 +89,7 @@ enum AIProvider: String, CaseIterable {
             return [
                 "gemini-2.5-pro",
                 "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
                 "gemini-2.0-flash",
                 "gemini-2.0-flash-lite"
             ]

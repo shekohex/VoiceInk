@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import AppKit
+import os
 
 enum EnhancementPrompt {
     case transcriptionEnhancement
@@ -8,6 +9,8 @@ enum EnhancementPrompt {
 }
 
 class AIEnhancementService: ObservableObject {
+    private let logger = Logger(subsystem: "com.voiceink.enhancement", category: "AIEnhancementService")
+    
     @Published var isEnhancementEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isEnhancementEnabled, forKey: "isAIEnhancementEnabled")
@@ -53,7 +56,7 @@ class AIEnhancementService: ObservableObject {
     
     private let aiService: AIService
     private let screenCaptureService: ScreenCaptureService
-    private let baseTimeout: TimeInterval = 10
+    private let baseTimeout: TimeInterval = 30
     private let rateLimitInterval: TimeInterval = 1.0
     private var lastRequestTime: Date?
     private let modelContext: ModelContext
@@ -126,7 +129,7 @@ class AIEnhancementService: ObservableObject {
            let selectedText = selectedText, !selectedText.isEmpty {
             
             let selectedTextContext = "\n\nSelected Text: \(selectedText)"
-            let contextSection = "\n\n\(AIPrompts.contextInstructions)\n\n<CONTEXT_INFORMATION>\(selectedTextContext)\n</CONTEXT_INFORMATION>"
+            let contextSection = "\n\n<CONTEXT_INFORMATION>\(selectedTextContext)\n</CONTEXT_INFORMATION>"
             return activePrompt.promptText + contextSection
         }
         
@@ -147,7 +150,7 @@ class AIEnhancementService: ObservableObject {
         }
         
         let contextSection = if !clipboardContext.isEmpty || !screenCaptureContext.isEmpty {
-            "\n\n\(AIPrompts.contextInstructions)\n\n<CONTEXT_INFORMATION>\(clipboardContext)\(screenCaptureContext)\n</CONTEXT_INFORMATION>"
+            "\n\n<CONTEXT_INFORMATION>\(clipboardContext)\(screenCaptureContext)\n</CONTEXT_INFORMATION>"
         } else {
             ""
         }
@@ -171,11 +174,15 @@ class AIEnhancementService: ObservableObject {
         }
         
         guard !text.isEmpty else {
-            throw EnhancementError.emptyText
+            return "" // Silently return empty string instead of throwing error
         }
         
         let formattedText = "\n<TRANSCRIPT>\n\(text)\n</TRANSCRIPT>"
         let systemMessage = getSystemMessage(for: mode)
+        
+        // Log the message being sent to AI enhancement
+        logger.notice("AI Enhancement - System Message: \(systemMessage, privacy: .public)")
+        logger.notice("AI Enhancement - User Message: \(formattedText, privacy: .public)")
         
         if aiService.selectedProvider == .ollama {
             do {
@@ -368,7 +375,6 @@ class AIEnhancementService: ObservableObject {
 
 enum EnhancementError: Error {
     case notConfigured
-    case emptyText
     case invalidResponse
     case enhancementFailed
     case networkError
@@ -380,8 +386,6 @@ extension EnhancementError: LocalizedError {
         switch self {
         case .notConfigured:
             return "AI provider not configured. Please check your API key."
-        case .emptyText:
-            return "No text to enhance."
         case .invalidResponse:
             return "Invalid response from AI provider."
         case .enhancementFailed:

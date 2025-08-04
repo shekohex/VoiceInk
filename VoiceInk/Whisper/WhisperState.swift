@@ -27,11 +27,7 @@ class WhisperState: NSObject, ObservableObject {
     @Published var clipboardMessage = ""
     @Published var miniRecorderError: String?
     @Published var shouldCancelRecording = false
-    @Published var isAutoCopyEnabled: Bool = UserDefaults.standard.object(forKey: "IsAutoCopyEnabled") as? Bool ?? true {
-        didSet {
-            UserDefaults.standard.set(isAutoCopyEnabled, forKey: "IsAutoCopyEnabled")
-        }
-    }
+
     @Published var recorderType: String = UserDefaults.standard.string(forKey: "RecorderType") ?? "mini" {
         didSet {
             UserDefaults.standard.set(recorderType, forKey: "RecorderType")
@@ -62,6 +58,7 @@ class WhisperState: NSObject, ObservableObject {
     private var localTranscriptionService: LocalTranscriptionService!
     private lazy var cloudTranscriptionService = CloudTranscriptionService()
     private lazy var nativeAppleTranscriptionService = NativeAppleTranscriptionService()
+    private lazy var parakeetTranscriptionService = ParakeetTranscriptionService(customModelsDirectory: parakeetModelsDirectory)
     
     private var modelUrl: URL? {
         let possibleURLs = [
@@ -84,6 +81,7 @@ class WhisperState: NSObject, ObservableObject {
     
     let modelsDirectory: URL
     let recordingsDirectory: URL
+    let parakeetModelsDirectory: URL
     let enhancementService: AIEnhancementService?
     var licenseViewModel: LicenseViewModel
     let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "WhisperState")
@@ -92,6 +90,7 @@ class WhisperState: NSObject, ObservableObject {
     
     // For model progress tracking
     @Published var downloadProgress: [String: Double] = [:]
+    @Published var isDownloadingParakeet = false
     
     init(modelContext: ModelContext, enhancementService: AIEnhancementService? = nil) {
         self.modelContext = modelContext
@@ -100,6 +99,7 @@ class WhisperState: NSObject, ObservableObject {
         
         self.modelsDirectory = appSupportDirectory.appendingPathComponent("WhisperModels")
         self.recordingsDirectory = appSupportDirectory.appendingPathComponent("Recordings")
+        self.parakeetModelsDirectory = appSupportDirectory.appendingPathComponent("ParakeetModels")
         
         self.enhancementService = enhancementService
         self.licenseViewModel = LicenseViewModel()
@@ -170,7 +170,7 @@ class WhisperState: NSObject, ObservableObject {
                             }
                             
                             await ActiveWindowService.shared.applyConfigurationForCurrentApp()
-        
+         
                             // Only load model if it's a local model and not already loaded
                             if let model = self.currentTranscriptionModel, model.provider == .local {
                                 if let localWhisperModel = self.availableModels.first(where: { $0.name == model.name }),
@@ -181,6 +181,8 @@ class WhisperState: NSObject, ObservableObject {
                                         self.logger.error("❌ Model loading failed: \(error.localizedDescription)")
                                     }
                                 }
+                                    } else if let model = self.currentTranscriptionModel, model.provider == .parakeet {
+            try? await parakeetTranscriptionService.loadModel()
                             }
         
                             if let enhancementService = self.enhancementService,
@@ -220,6 +222,17 @@ class WhisperState: NSObject, ObservableObject {
             recordingState = .transcribing
         }
         
+        // Play stop sound when transcription starts with a small delay
+        Task {
+            let isSystemMuteEnabled = UserDefaults.standard.bool(forKey: "isSystemMuteEnabled")
+            if isSystemMuteEnabled {
+                try? await Task.sleep(nanoseconds: 200_000_000) // 200 milliseconds delay
+            }
+            await MainActor.run {
+                SoundManager.shared.playStopSound()
+            }
+        }
+        
         defer {
             if shouldCancelRecording {
                 Task {
@@ -239,6 +252,8 @@ class WhisperState: NSObject, ObservableObject {
             switch model.provider {
             case .local:
                 transcriptionService = localTranscriptionService
+                    case .parakeet:
+            transcriptionService = parakeetTranscriptionService
             case .nativeApple:
                 transcriptionService = nativeAppleTranscriptionService
             default:
@@ -332,14 +347,9 @@ class WhisperState: NSObject, ObservableObject {
 
             if await checkCancellationAndCleanup() { return }
 
-            SoundManager.shared.playStopSound()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 
-                CursorPaster.pasteAtCursor(text, shouldPreserveClipboard: !self.isAutoCopyEnabled)
-                
-                if self.isAutoCopyEnabled {
-                    ClipboardManager.copyToClipboard(text)
-                }
+                CursorPaster.pasteAtCursor(text, shouldPreserveClipboard: true)
 
                 // Automatically press Enter if the active Power Mode configuration allows it.
                 let powerMode = PowerModeManager.shared
