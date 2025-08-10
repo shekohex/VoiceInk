@@ -28,6 +28,7 @@ class WhisperState: NSObject, ObservableObject {
     @Published var miniRecorderError: String?
     @Published var shouldCancelRecording = false
 
+
     @Published var recorderType: String = UserDefaults.standard.string(forKey: "RecorderType") ?? "mini" {
         didSet {
             UserDefaults.standard.set(recorderType, forKey: "RecorderType")
@@ -105,6 +106,11 @@ class WhisperState: NSObject, ObservableObject {
         self.licenseViewModel = LicenseViewModel()
         
         super.init()
+        
+        // Configure the session manager
+        if let enhancementService = enhancementService {
+            PowerModeSessionManager.shared.configure(whisperState: self, enhancementService: enhancementService)
+        }
         
         // Set the whisperState reference after super.init()
         self.localTranscriptionService = LocalTranscriptionService(modelsDirectory: self.modelsDirectory, whisperState: self)
@@ -214,6 +220,7 @@ class WhisperState: NSObject, ObservableObject {
             await MainActor.run {
                 recordingState = .idle
             }
+            await PowerModeSessionManager.shared.endSession()
             await cleanupModelResources()
             return
         }
@@ -304,6 +311,7 @@ class WhisperState: NSObject, ObservableObject {
                     )
                     modelContext.insert(newTranscription)
                     try? modelContext.save()
+                    NotificationCenter.default.post(name: .transcriptionCreated, object: newTranscription)
                     text = enhancedText
                 } catch {
                     let newTranscription = Transcription(
@@ -316,6 +324,7 @@ class WhisperState: NSObject, ObservableObject {
                     )
                     modelContext.insert(newTranscription)
                     try? modelContext.save()
+                    NotificationCenter.default.post(name: .transcriptionCreated, object: newTranscription)
                     
                     await MainActor.run {
                         NotificationManager.shared.showNotification(
@@ -334,6 +343,7 @@ class WhisperState: NSObject, ObservableObject {
                 )
                 modelContext.insert(newTranscription)
                 try? modelContext.save()
+                NotificationCenter.default.post(name: .transcriptionCreated, object: newTranscription)
             }
             
             if case .trialExpired = licenseViewModel.licenseState {
@@ -349,11 +359,10 @@ class WhisperState: NSObject, ObservableObject {
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 
-                CursorPaster.pasteAtCursor(text, shouldPreserveClipboard: true)
+                CursorPaster.pasteAtCursor(text)
 
-                // Automatically press Enter if the active Power Mode configuration allows it.
                 let powerMode = PowerModeManager.shared
-                if powerMode.isPowerModeEnabled && powerMode.currentActiveConfiguration.isAutoSendEnabled {
+                if let activeConfig = powerMode.currentActiveConfiguration, activeConfig.isAutoSendEnabled {
                     // Slight delay to ensure the paste operation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         CursorPaster.pressEnter()
@@ -368,6 +377,7 @@ class WhisperState: NSObject, ObservableObject {
             }
             
             await self.dismissMiniRecorder()
+            await PowerModeSessionManager.shared.endSession()
             
         } catch {
             do {
@@ -388,6 +398,7 @@ class WhisperState: NSObject, ObservableObject {
                     
                     modelContext.insert(failedTranscription)
                     try? modelContext.save()
+                    NotificationCenter.default.post(name: .transcriptionCreated, object: failedTranscription)
                 }
             } catch {
                 logger.error("❌ Could not create a record for the failed transcription: \(error.localizedDescription)")
@@ -401,6 +412,7 @@ class WhisperState: NSObject, ObservableObject {
             }
             
             await self.dismissMiniRecorder()
+            await PowerModeSessionManager.shared.endSession()
         }
     }
 
@@ -421,7 +433,3 @@ class WhisperState: NSObject, ObservableObject {
     }
 }
 
-extension Notification.Name {
-    static let toggleMiniRecorder = Notification.Name("toggleMiniRecorder")
-    static let didChangeModel = Notification.Name("didChangeModel")
-}

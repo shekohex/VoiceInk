@@ -17,6 +17,8 @@ class AIEnhancementService: ObservableObject {
             if isEnhancementEnabled && selectedPromptId == nil {
                 selectedPromptId = customPrompts.first?.id
             }
+            NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
+            NotificationCenter.default.post(name: .enhancementToggleChanged, object: nil)
         }
     }
     
@@ -29,6 +31,7 @@ class AIEnhancementService: ObservableObject {
     @Published var useScreenCaptureContext: Bool {
         didSet {
             UserDefaults.standard.set(useScreenCaptureContext, forKey: "useScreenCaptureContext")
+            NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
         }
     }
     
@@ -43,6 +46,8 @@ class AIEnhancementService: ObservableObject {
     @Published var selectedPromptId: UUID? {
         didSet {
             UserDefaults.standard.set(selectedPromptId?.uuidString, forKey: "selectedPromptId")
+            NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
+            NotificationCenter.default.post(name: .promptSelectionChanged, object: nil)
         }
     }
     
@@ -156,6 +161,12 @@ class AIEnhancementService: ObservableObject {
         }
         
         guard let activePrompt = activePrompt else {
+            // Use default prompt when none is selected
+            if let defaultPrompt = allPrompts.first(where: { $0.id == PredefinedPrompts.defaultPromptId }) {
+                var systemMessage = String(format: AIPrompts.customPromptTemplate, defaultPrompt.promptText)
+                systemMessage += contextSection
+                return systemMessage
+            }
             return AIPrompts.assistantMode + contextSection
         }
         
@@ -254,28 +265,28 @@ class AIEnhancementService: ObservableObject {
             request.addValue("application/json", forHTTPHeaderField: "Content-Type")
             request.addValue("Bearer \(aiService.apiKey)", forHTTPHeaderField: "Authorization")
             request.timeoutInterval = baseTimeout
-            
+
             let messages: [[String: Any]] = [
                 ["role": "system", "content": systemMessage],
                 ["role": "user", "content": formattedText]
             ]
-            
+
             let requestBody: [String: Any] = [
                 "model": aiService.currentModel,
                 "messages": messages,
-                "temperature": 0.3,
+                "temperature": aiService.currentModel.lowercased().hasPrefix("gpt-5") ? 1.0 : 0.3,
                 "stream": false
             ]
-            
+
             request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
-            
+
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
-                
+
                 guard let httpResponse = response as? HTTPURLResponse else {
                     throw EnhancementError.invalidResponse
                 }
-                
+
                 if httpResponse.statusCode == 200 {
                     guard let jsonResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                           let choices = jsonResponse["choices"] as? [[String: Any]],
@@ -284,14 +295,14 @@ class AIEnhancementService: ObservableObject {
                           let enhancedText = message["content"] as? String else {
                         throw EnhancementError.enhancementFailed
                     }
-                    
+
                     let filteredText = AIEnhancementOutputFilter.filter(enhancedText.trimmingCharacters(in: .whitespacesAndNewlines))
                     return filteredText
                 } else {
                     let errorString = String(data: data, encoding: .utf8) ?? "Could not decode error response."
                     throw EnhancementError.customError("HTTP \(httpResponse.statusCode): \(errorString)")
                 }
-                
+
             } catch let error as EnhancementError {
                 throw error
             } catch {

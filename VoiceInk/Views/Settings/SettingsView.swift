@@ -3,7 +3,6 @@ import Cocoa
 import KeyboardShortcuts
 import LaunchAtLogin
 import AVFoundation
-// Additional imports for Settings components
 
 struct SettingsView: View {
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
@@ -18,11 +17,11 @@ struct SettingsView: View {
     @State private var showResetOnboardingAlert = false
     @State private var currentShortcut = KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder)
     @State private var isCustomCancelEnabled = false
+
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Hotkey Selection Section
                 SettingsSection(
                     icon: "command.circle",
                     title: "VoiceInk Shortcut",
@@ -35,7 +34,6 @@ struct SettingsView: View {
                             shortcutName: .toggleMiniRecorder
                         )
 
-                        // Hotkey 2 Configuration (Conditional)
                         if hotkeyManager.selectedHotkey2 != .none {
                             Divider()
                             hotkeyView(
@@ -49,7 +47,6 @@ struct SettingsView: View {
                             )
                         }
 
-                        // "Add another hotkey" button
                         if hotkeyManager.selectedHotkey1 != .none && hotkeyManager.selectedHotkey2 == .none {
                             HStack {
                                 Spacer()
@@ -70,7 +67,6 @@ struct SettingsView: View {
 
                         Divider()
 
-                        // Cancel Recording Override Toggle
                         Toggle(isOn: $isCustomCancelEnabled) {
                             Text("Override default double-tap Escape cancellation")
                         }
@@ -81,7 +77,6 @@ struct SettingsView: View {
                             }
                         }
                         
-                        // Show shortcut recorder only when override is enabled
                         if isCustomCancelEnabled {
                             HStack(spacing: 12) {
                                 Text("Custom Cancel Shortcut")
@@ -105,7 +100,23 @@ struct SettingsView: View {
                     }
                 }
 
-                // Recording Feedback Section
+                SettingsSection(
+                    icon: "doc.on.clipboard.fill",
+                    title: "Paste Last Transcription",
+                    subtitle: "Configure shortcut to paste your most recent transcription"
+                ) {
+                    HStack(spacing: 12) {
+                        Text("Paste Shortcut")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        KeyboardShortcuts.Recorder(for: .pasteLastTranscription)
+                            .controlSize(.small)
+                        
+                        Spacer()
+                    }
+                }
+
                 SettingsSection(
                     icon: "speaker.wave.2.bubble.left.fill",
                     title: "Recording Feedback",
@@ -126,15 +137,11 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .help("Automatically mute system audio when recording starts and restore when recording stops")
 
-                        Toggle(isOn: $playbackController.isPauseMediaEnabled) {
-                            Text("Pause media during recording")
-                        }
-                        .toggleStyle(.switch)
-                        .help("Automatically pause active media playback when recording starts and resume when recording stops")
                     }
                 }
 
-                // Recorder Preference Section
+                ExperimentalFeaturesSection()
+
                 SettingsSection(
                     icon: "rectangle.on.rectangle",
                     title: "Recorder Style",
@@ -153,7 +160,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // Paste Method Section
                 SettingsSection(
                     icon: "doc.on.clipboard",
                     title: "Paste Method",
@@ -171,7 +177,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // App Appearance Section
                 SettingsSection(
                     icon: "dock.rectangle",
                     title: "App Appearance",
@@ -186,16 +191,14 @@ struct SettingsView: View {
                     }
                 }
 
-                // Audio Cleanup Section
                 SettingsSection(
-                    icon: "trash.circle",
-                    title: "Audio Cleanup",
-                    subtitle: "Manage recording storage"
+                    icon: "lock.shield",
+                    title: "Data & Privacy",
+                    subtitle: "Control transcript history and storage"
                 ) {
                     AudioCleanupSettingsView()
                 }
                 
-                // Startup Section
                 SettingsSection(
                     icon: "power",
                     title: "Startup",
@@ -210,7 +213,6 @@ struct SettingsView: View {
                     }
                 }
                 
-                // Updates Section
                 SettingsSection(
                     icon: "arrow.triangle.2.circlepath",
                     title: "Updates",
@@ -229,7 +231,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // Reset Onboarding Section
                 SettingsSection(
                     icon: "arrow.counterclockwise",
                     title: "Reset Onboarding",
@@ -247,7 +248,6 @@ struct SettingsView: View {
                     }
                 }
 
-                // Data Management Section
                 SettingsSection(
                     icon: "arrow.up.arrow.down.circle",
                     title: "Data Management",
@@ -300,7 +300,6 @@ struct SettingsView: View {
         }
         .background(Color(NSColor.controlBackgroundColor))
         .onAppear {
-            // Initialize custom cancel shortcut state from stored preferences
             isCustomCancelEnabled = KeyboardShortcuts.getShortcut(for: .cancelRecorder) != nil
         }
         .alert("Reset Onboarding", isPresented: $showResetOnboardingAlert) {

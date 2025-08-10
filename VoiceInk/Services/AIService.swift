@@ -45,7 +45,7 @@ enum AIProvider: String, CaseIterable {
     var defaultModel: String {
         switch self {
         case .cerebras:
-            return "qwen-3-32b"
+            return "gpt-oss-120b"
         case .groq:
             return "qwen/qwen3-32b"
         case .gemini:
@@ -53,7 +53,7 @@ enum AIProvider: String, CaseIterable {
         case .anthropic:
             return "claude-sonnet-4-0"
         case .openAI:
-            return "gpt-4.1-mini"
+            return "gpt-5-mini"
         case .mistral:
             return "mistral-large-latest"
         case .elevenLabs:
@@ -65,7 +65,7 @@ enum AIProvider: String, CaseIterable {
         case .custom:
             return UserDefaults.standard.string(forKey: "customProviderModel") ?? ""
         case .openRouter:
-            return "openai/gpt-4o"
+            return "openai/gpt-oss-120b"
         }
     }
     
@@ -75,6 +75,7 @@ enum AIProvider: String, CaseIterable {
             return [
                 "llama-4-scout-17b-16e-instruct",
                 "llama-3.3-70b",
+                "gpt-oss-120b",
                 "qwen-3-32b",
                 "qwen-3-235b-a22b-instruct-2507"
             ]
@@ -103,8 +104,9 @@ enum AIProvider: String, CaseIterable {
             ]
         case .openAI:
             return [
-                "gpt-4.1",
-                "gpt-4.1-mini"
+                "gpt-5",
+                "gpt-5-mini",
+                "gpt-5-nano"
             ]
         case .mistral:
             return [
@@ -171,6 +173,7 @@ class AIService: ObservableObject {
                     }
                 }
             }
+            NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
         }
     }
     
@@ -261,6 +264,7 @@ class AIService: ObservableObject {
         }
         
         objectWillChange.send()
+        NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
     }
     
     func saveAPIKey(_ key: String, completion: @escaping (Bool) -> Void) {
@@ -316,8 +320,7 @@ class AIService: ObservableObject {
             "model": currentModel,
             "messages": [
                 ["role": "user", "content": "test"]
-            ],
-            "max_tokens": 1
+            ]
         ]
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: testBody)
@@ -539,7 +542,4 @@ class AIService: ObservableObject {
     }
 }
 
-extension Notification.Name {
-    static let aiProviderKeyChanged = Notification.Name("aiProviderKeyChanged")
-} 
 

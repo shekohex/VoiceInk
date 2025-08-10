@@ -13,6 +13,7 @@ struct GeneralSettings: Codable {
     let isMenuBarOnly: Bool?
     let useAppleScriptPaste: Bool?
     let recorderType: String?
+    let doNotMaintainTranscriptHistory: Bool?
     let isAudioCleanupEnabled: Bool?
     let audioRetentionPeriod: Int?
 
@@ -20,13 +21,13 @@ struct GeneralSettings: Codable {
     let isSystemMuteEnabled: Bool?
     let isPauseMediaEnabled: Bool?
     let isTextFormattingEnabled: Bool?
+    let isExperimentalFeaturesEnabled: Bool?
 }
 
 struct VoiceInkExportedSettings: Codable {
     let version: String
     let customPrompts: [CustomPrompt]
     let powerModeConfigs: [PowerModeConfig]
-    let defaultPowerModeConfig: PowerModeConfig
     let dictionaryItems: [DictionaryItem]?
     let wordReplacements: [String: String]?
     let generalSettings: GeneralSettings?
@@ -44,6 +45,7 @@ class ImportExportService {
     private let keyIsMenuBarOnly = "IsMenuBarOnly"
     private let keyUseAppleScriptPaste = "UseAppleScriptPaste"
     private let keyRecorderType = "RecorderType"
+    private let keyDoNotMaintainTranscriptHistory = "DoNotMaintainTranscriptHistory"
     private let keyIsAudioCleanupEnabled = "IsAudioCleanupEnabled"
     private let keyAudioRetentionPeriod = "AudioRetentionPeriod"
 
@@ -67,7 +69,6 @@ class ImportExportService {
         let exportablePrompts = enhancementService.customPrompts.filter { !$0.isPredefined }
 
         let powerConfigs = powerModeManager.configurations
-        let defaultPowerConfig = powerModeManager.defaultConfig
         
         // Export custom models
         let customModels = CustomModelManager.shared.customModels
@@ -89,20 +90,21 @@ class ImportExportService {
             isMenuBarOnly: menuBarManager.isMenuBarOnly,
             useAppleScriptPaste: UserDefaults.standard.bool(forKey: keyUseAppleScriptPaste),
             recorderType: whisperState.recorderType,
+            doNotMaintainTranscriptHistory: UserDefaults.standard.bool(forKey: keyDoNotMaintainTranscriptHistory),
             isAudioCleanupEnabled: UserDefaults.standard.bool(forKey: keyIsAudioCleanupEnabled),
             audioRetentionPeriod: UserDefaults.standard.integer(forKey: keyAudioRetentionPeriod),
 
             isSoundFeedbackEnabled: soundManager.isEnabled,
             isSystemMuteEnabled: mediaController.isSystemMuteEnabled,
             isPauseMediaEnabled: playbackController.isPauseMediaEnabled,
-            isTextFormattingEnabled: UserDefaults.standard.object(forKey: keyIsTextFormattingEnabled) as? Bool ?? true
+            isTextFormattingEnabled: UserDefaults.standard.object(forKey: keyIsTextFormattingEnabled) as? Bool ?? true,
+            isExperimentalFeaturesEnabled: UserDefaults.standard.bool(forKey: "isExperimentalFeaturesEnabled")
         )
 
         let exportedSettings = VoiceInkExportedSettings(
             version: currentSettingsVersion,
             customPrompts: exportablePrompts,
             powerModeConfigs: powerConfigs,
-            defaultPowerModeConfig: defaultPowerConfig,
             dictionaryItems: exportedDictionaryItems,
             wordReplacements: exportedWordReplacements,
             generalSettings: generalSettingsToExport,
@@ -172,9 +174,7 @@ class ImportExportService {
                     
                     let powerModeManager = PowerModeManager.shared
                     powerModeManager.configurations = importedSettings.powerModeConfigs
-                    powerModeManager.defaultConfig = importedSettings.defaultPowerModeConfig
                     powerModeManager.saveConfigurations()
-                    powerModeManager.updateConfiguration(powerModeManager.defaultConfig)
 
                     // Import Custom Models
                     if let modelsToImport = importedSettings.customCloudModels {
@@ -235,6 +235,9 @@ class ImportExportService {
                         if let recType = general.recorderType {
                             whisperState.recorderType = recType
                         }
+                        if let doNotMaintainHistory = general.doNotMaintainTranscriptHistory {
+                            UserDefaults.standard.set(doNotMaintainHistory, forKey: self.keyDoNotMaintainTranscriptHistory)
+                        }
                         if let audioCleanup = general.isAudioCleanupEnabled {
                             UserDefaults.standard.set(audioCleanup, forKey: self.keyIsAudioCleanupEnabled)
                         }
@@ -250,6 +253,12 @@ class ImportExportService {
                         }
                         if let pauseMedia = general.isPauseMediaEnabled {
                             playbackController.isPauseMediaEnabled = pauseMedia
+                        }
+                        if let experimentalEnabled = general.isExperimentalFeaturesEnabled {
+                            UserDefaults.standard.set(experimentalEnabled, forKey: "isExperimentalFeaturesEnabled")
+                            if experimentalEnabled == false {
+                                playbackController.isPauseMediaEnabled = false
+                            }
                         }
                         if let textFormattingEnabled = general.isTextFormattingEnabled {
                             UserDefaults.standard.set(textFormattingEnabled, forKey: self.keyIsTextFormattingEnabled)
