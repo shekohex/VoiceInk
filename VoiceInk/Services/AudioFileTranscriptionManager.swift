@@ -124,7 +124,8 @@ class AudioTranscriptionManager: ObservableObject {
                    enhancementService.isConfigured {
                     processingPhase = .enhancing
                     do {
-                        let (enhancedText, enhancementDuration) = try await enhancementService.enhance(text)
+                        // inside the enhancement success path where transcription is created
+                        let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(text)
                         let transcription = Transcription(
                             text: text,
                             duration: duration,
@@ -132,8 +133,11 @@ class AudioTranscriptionManager: ObservableObject {
                             audioFileURL: permanentURL.absoluteString,
                             transcriptionModelName: currentModel.displayName,
                             aiEnhancementModelName: enhancementService.getAIService()?.currentModel,
+                            promptName: promptName,
                             transcriptionDuration: transcriptionDuration,
-                            enhancementDuration: enhancementDuration
+                            enhancementDuration: enhancementDuration,
+                            aiRequestSystemMessage: enhancementService.lastSystemMessageSent,
+                            aiRequestUserMessage: enhancementService.lastUserMessageSent
                         )
                         modelContext.insert(transcription)
                         try modelContext.save()
@@ -146,6 +150,7 @@ class AudioTranscriptionManager: ObservableObject {
                             duration: duration,
                             audioFileURL: permanentURL.absoluteString,
                             transcriptionModelName: currentModel.displayName,
+                            promptName: nil,
                             transcriptionDuration: transcriptionDuration
                         )
                         modelContext.insert(transcription)
@@ -159,6 +164,7 @@ class AudioTranscriptionManager: ObservableObject {
                         duration: duration,
                         audioFileURL: permanentURL.absoluteString,
                         transcriptionModelName: currentModel.displayName,
+                        promptName: nil,
                         transcriptionDuration: transcriptionDuration
                     )
                     modelContext.insert(transcription)
@@ -208,4 +214,4 @@ enum TranscriptionError: Error, LocalizedError {
             return "Transcription was cancelled"
         }
     }
-} 
+}

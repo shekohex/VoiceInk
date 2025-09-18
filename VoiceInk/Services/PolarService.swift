@@ -87,19 +87,19 @@ class PolarService {
 }
 
 enum LicenseError: Error, LocalizedError {
-    case activationFailed
-    case validationFailed
-    case activationLimitReached
+    case activationFailed(String)
+    case validationFailed(String)
+    case activationLimitReached(String)
     case activationNotRequired
     
     var errorDescription: String? {
         switch self {
-        case .activationFailed:
-            return "Failed to activate license on this device."
-        case .validationFailed:
-            return "License validation failed."
-        case .activationLimitReached:
-            return "This license has reached its maximum number of activations."
+        case .activationFailed(let details):
+            return "Failed to activate license: \(details)"
+        case .validationFailed(let details):
+            return "License validation failed: \(details)"
+        case .activationLimitReached(let details):
+            return "Activation limit reached: \(details)"
         case .activationNotRequired:
             return "This license does not require activation."
         }

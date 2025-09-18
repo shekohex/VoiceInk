@@ -170,7 +170,7 @@ class WhisperState: NSObject, ObservableObject {
                             self.recordedFile = permanentURL
         
                             try await self.recorder.startRecording(toOutputFile: permanentURL)
-        
+                            
                             await MainActor.run {
                                 self.recordingState = .recording
                             }
@@ -220,7 +220,6 @@ class WhisperState: NSObject, ObservableObject {
             await MainActor.run {
                 recordingState = .idle
             }
-            await PowerModeSessionManager.shared.endSession()
             await cleanupModelResources()
             return
         }
@@ -269,6 +268,7 @@ class WhisperState: NSObject, ObservableObject {
 
             let transcriptionStart = Date()
             var text = try await transcriptionService.transcribe(audioURL: url, model: model)
+            text = WhisperHallucinationFilter.filter(text)
             let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
             
             if await checkCancellationAndCleanup() { return }
@@ -280,7 +280,7 @@ class WhisperState: NSObject, ObservableObject {
             }
             
             let audioAsset = AVURLAsset(url: url)
-            let actualDuration = CMTimeGetSeconds(try await audioAsset.load(.duration))
+            let actualDuration = (try? CMTimeGetSeconds(await audioAsset.load(.duration))) ?? 0.0
             var promptDetectionResult: PromptDetectionService.PromptDetectionResult? = nil
             let originalText = text
             
@@ -298,17 +298,20 @@ class WhisperState: NSObject, ObservableObject {
 
                     await MainActor.run { self.recordingState = .enhancing }
                     let textForAI = promptDetectionResult?.processedText ?? text
-                    let (enhancedText, enhancementDuration) = try await enhancementService.enhance(textForAI)
-                    let newTranscription = Transcription(
-                        text: originalText,
-                        duration: actualDuration,
-                        enhancedText: enhancedText,
-                        audioFileURL: url.absoluteString,
-                        transcriptionModelName: model.displayName,
-                        aiEnhancementModelName: enhancementService.getAIService()?.currentModel,
-                        transcriptionDuration: transcriptionDuration,
-                        enhancementDuration: enhancementDuration
-                    )
+                    let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(textForAI)
+        let newTranscription = Transcription(
+            text: originalText,
+            duration: actualDuration,
+            enhancedText: enhancedText,
+            audioFileURL: url.absoluteString,
+            transcriptionModelName: model.displayName,
+            aiEnhancementModelName: enhancementService.getAIService()?.currentModel,
+            promptName: promptName,
+            transcriptionDuration: transcriptionDuration,
+            enhancementDuration: enhancementDuration,
+            aiRequestSystemMessage: enhancementService.lastSystemMessageSent,
+            aiRequestUserMessage: enhancementService.lastUserMessageSent
+        )
                     modelContext.insert(newTranscription)
                     try? modelContext.save()
                     NotificationCenter.default.post(name: .transcriptionCreated, object: newTranscription)
@@ -320,6 +323,7 @@ class WhisperState: NSObject, ObservableObject {
                         enhancedText: "Enhancement failed: \(error)",
                         audioFileURL: url.absoluteString,
                         transcriptionModelName: model.displayName,
+                        promptName: nil,
                         transcriptionDuration: transcriptionDuration
                     )
                     modelContext.insert(newTranscription)
@@ -339,6 +343,7 @@ class WhisperState: NSObject, ObservableObject {
                     duration: actualDuration,
                     audioFileURL: url.absoluteString,
                     transcriptionModelName: model.displayName,
+                    promptName: nil,
                     transcriptionDuration: transcriptionDuration
                 )
                 modelContext.insert(newTranscription)
@@ -353,12 +358,14 @@ class WhisperState: NSObject, ObservableObject {
                     """
             }
 
-            text += " "
+            let shouldAddSpace = UserDefaults.standard.object(forKey: "AppendTrailingSpace") as? Bool ?? true
+            if shouldAddSpace {
+                text += " "
+            }
 
             if await checkCancellationAndCleanup() { return }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                
                 CursorPaster.pasteAtCursor(text)
 
                 let powerMode = PowerModeManager.shared
@@ -377,12 +384,11 @@ class WhisperState: NSObject, ObservableObject {
             }
             
             await self.dismissMiniRecorder()
-            await PowerModeSessionManager.shared.endSession()
             
         } catch {
             do {
                 let audioAsset = AVURLAsset(url: url)
-                let duration = CMTimeGetSeconds(try await audioAsset.load(.duration))
+                let duration = (try? CMTimeGetSeconds(await audioAsset.load(.duration))) ?? 0.0
                 
                 await MainActor.run {
                     let errorDescription = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -393,7 +399,8 @@ class WhisperState: NSObject, ObservableObject {
                         text: "Transcription Failed: \(fullErrorText)",
                         duration: duration,
                         enhancedText: nil,
-                        audioFileURL: url.absoluteString
+                        audioFileURL: url.absoluteString,
+                        promptName: nil
                     )
                     
                     modelContext.insert(failedTranscription)
@@ -412,7 +419,6 @@ class WhisperState: NSObject, ObservableObject {
             }
             
             await self.dismissMiniRecorder()
-            await PowerModeSessionManager.shared.endSession()
         }
     }
 

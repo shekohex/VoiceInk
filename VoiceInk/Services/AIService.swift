@@ -30,7 +30,7 @@ enum AIProvider: String, CaseIterable {
         case .openRouter:
             return "https://openrouter.ai/api/v1/chat/completions"
         case .mistral:
-            return "https://api.mistral.ai/v1/audio/transcriptions"
+            return "https://api.mistral.ai/v1/chat/completions"
         case .elevenLabs:
             return "https://api.elevenlabs.io/v1/speech-to-text"
         case .deepgram:
@@ -82,9 +82,10 @@ enum AIProvider: String, CaseIterable {
         case .groq:
             return [
                 "llama-3.3-70b-versatile",
-                "moonshotai/kimi-k2-instruct",
+                "moonshotai/kimi-k2-instruct-0905",
                 "qwen/qwen3-32b",
-                "meta-llama/llama-4-maverick-17b-128e-instruct"
+                "meta-llama/llama-4-maverick-17b-128e-instruct",
+                "openai/gpt-oss-120b"
             ]
         case .gemini:
             return [
@@ -106,11 +107,14 @@ enum AIProvider: String, CaseIterable {
             return [
                 "gpt-5",
                 "gpt-5-mini",
-                "gpt-5-nano"
+                "gpt-5-nano",
+                "gpt-4.1",
+                "gpt-4.1-mini"
             ]
         case .mistral:
             return [
                 "mistral-large-latest",
+                "mistral-medium-latest",
                 "mistral-small-latest",
                 "mistral-saba-latest"
             ]
@@ -325,15 +329,30 @@ class AIService: ObservableObject {
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: testBody)
         
+        logger.notice("🔑 Verifying API key for \(self.selectedProvider.rawValue, privacy: .public) provider at \(url.absoluteString, privacy: .public)")
+        
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
+                self.logger.notice("🔑 API key verification failed for \(self.selectedProvider.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 completion(false)
                 return
             }
             
             if let httpResponse = response as? HTTPURLResponse {
-                completion(httpResponse.statusCode == 200)
+                let isValid = httpResponse.statusCode == 200
+                
+                if !isValid {
+                    // Log the exact API error response
+                    if let data = data, let exactAPIError = String(data: data, encoding: .utf8) {
+                        self.logger.notice("🔑 API key verification failed for \(self.selectedProvider.rawValue, privacy: .public) - Status: \(httpResponse.statusCode) - \(exactAPIError, privacy: .public)")
+                    } else {
+                        self.logger.notice("🔑 API key verification failed for \(self.selectedProvider.rawValue, privacy: .public) - Status: \(httpResponse.statusCode)")
+                    }
+                }
+                
+                completion(isValid)
             } else {
+                self.logger.notice("🔑 API key verification failed for \(self.selectedProvider.rawValue, privacy: .public): Invalid response")
                 completion(false)
             }
         }.resume()

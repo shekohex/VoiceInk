@@ -90,13 +90,13 @@ import Foundation
         // Parakeet Model
         ParakeetModel(
             name: "parakeet-tdt-0.6b",
-            displayName: "Parakeet",
-            description: "NVIDIA's ASR model for lightning-fast english transcription.",
-            size: "600 MB",
+            displayName: "Parakeet V3",
+            description: "NVIDIA's ASR model V3 for lightning-fast transcription with multi-lingual(English + European) support.",
+            size: "500 MB",
             speed: 0.99,
             accuracy: 0.94,
             ramUsage: 0.8,
-            supportedLanguages: getLanguageDictionary(isMultilingual: false, provider: .parakeet)
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .parakeet)
         ),
         
          // Local Models
@@ -213,6 +213,16 @@ import Foundation
            isMultilingual: true,
            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .deepgram)
        ),
+       CloudModel(
+           name: "nova-3-medical",
+           displayName: "Nova-3 Medical (Deepgram)",
+           description: "Specialized medical transcription model optimized for clinical environments.",
+           provider: .deepgram,
+           speed: 0.9,
+           accuracy: 0.96,
+           isMultilingual: false,
+           supportedLanguages: getLanguageDictionary(isMultilingual: false, provider: .deepgram)
+       ),
         CloudModel(
             name: "voxtral-mini-latest",
             displayName: "Voxtral Mini (Mistral)",
@@ -222,6 +232,28 @@ import Foundation
             accuracy: 0.97,
             isMultilingual: true,
             supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .mistral)
+        ),
+        
+        // Gemini Models
+        CloudModel(
+            name: "gemini-2.5-pro",
+            displayName: "Gemini 2.5 Pro",
+            description: "Google's advanced multimodal model with high-quality transcription capabilities.",
+            provider: .gemini,
+            speed: 0.7,
+            accuracy: 0.96,
+            isMultilingual: true,
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .gemini)
+        ),
+        CloudModel(
+            name: "gemini-2.5-flash",
+            displayName: "Gemini 2.5 Flash",
+            description: "Google's optimized model for low-latency transcription with multimodal support.",
+            provider: .gemini,
+            speed: 0.9,
+            accuracy: 0.94,
+            isMultilingual: true,
+            supportedLanguages: getLanguageDictionary(isMultilingual: true, provider: .gemini)
         )
      ]
  

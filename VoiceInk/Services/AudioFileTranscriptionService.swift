@@ -60,6 +60,7 @@ class AudioTranscriptionService: ObservableObject {
             }
             
             let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
+            text = WhisperHallucinationFilter.filter(text)
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             
             // Apply word replacements if enabled
@@ -95,8 +96,8 @@ class AudioTranscriptionService: ObservableObject {
                enhancementService.isEnhancementEnabled,
                enhancementService.isConfigured {
                 do {
-                    let (enhancedText, enhancementDuration) = try await enhancementService.enhance(text)
-                    
+                    // inside the enhancement success path where newTranscription is created
+                    let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(text)
                     let newTranscription = Transcription(
                         text: text,
                         duration: duration,
@@ -104,8 +105,11 @@ class AudioTranscriptionService: ObservableObject {
                         audioFileURL: permanentURLString,
                         transcriptionModelName: model.displayName,
                         aiEnhancementModelName: enhancementService.getAIService()?.currentModel,
+                        promptName: promptName,
                         transcriptionDuration: transcriptionDuration,
-                        enhancementDuration: enhancementDuration
+                        enhancementDuration: enhancementDuration,
+                        aiRequestSystemMessage: enhancementService.lastSystemMessageSent,
+                        aiRequestUserMessage: enhancementService.lastUserMessageSent
                     )
                     modelContext.insert(newTranscription)
                     do {
@@ -126,6 +130,7 @@ class AudioTranscriptionService: ObservableObject {
                         duration: duration,
                         audioFileURL: permanentURLString,
                         transcriptionModelName: model.displayName,
+                        promptName: nil,
                         transcriptionDuration: transcriptionDuration
                     )
                     modelContext.insert(newTranscription)
@@ -148,6 +153,7 @@ class AudioTranscriptionService: ObservableObject {
                     duration: duration,
                     audioFileURL: permanentURLString,
                     transcriptionModelName: model.displayName,
+                    promptName: nil,
                     transcriptionDuration: transcriptionDuration
                 )
                 modelContext.insert(newTranscription)

@@ -107,8 +107,7 @@ actor WhisperContext {
         for i in 0..<whisper_full_n_segments(context) {
             transcription += String(cString: whisper_full_get_segment_text(context, i))
         }
-        let filteredTranscription = WhisperHallucinationFilter.filter(transcription)
-        return filteredTranscription
+        return transcription
     }
 
     static func createContext(path: String) async throws -> WhisperContext {
@@ -126,6 +125,10 @@ actor WhisperContext {
         var params = whisper_context_default_params()
         #if targetEnvironment(simulator)
         params.use_gpu = false
+        logger.info("Running on the simulator, using CPU")
+        #else
+        params.flash_attn = true // Enable flash attention for Metal
+        logger.info("Flash attention enabled for Metal")
         #endif
         
         let context = whisper_init_from_file_with_params(path, params)

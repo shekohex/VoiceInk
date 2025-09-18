@@ -4,7 +4,7 @@ import CoreAudio
 import os
 
 @MainActor
-class Recorder: ObservableObject {
+class Recorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "Recorder")
     private let deviceManager = AudioDeviceManager.shared
@@ -14,13 +14,15 @@ class Recorder: ObservableObject {
     private let playbackController = PlaybackController.shared
     @Published var audioMeter = AudioMeter(averagePower: 0, peakPower: 0)
     private var audioLevelCheckTask: Task<Void, Never>?
+    private var audioMeterUpdateTask: Task<Void, Never>?
     private var hasDetectedAudioInCurrentSession = false
     
     enum RecorderError: Error {
         case couldNotStartRecording
     }
     
-    init() {
+    override init() {
+        super.init()
         setupDeviceChangeObserver()
     }
     
@@ -74,12 +76,7 @@ class Recorder: ObservableObject {
         UserDefaults.standard.set(String(currentDeviceID), forKey: "lastUsedMicrophoneDeviceID")
         
         hasDetectedAudioInCurrentSession = false
-        
-        Task { 
-            await playbackController.pauseMedia()
-            await mediaController.muteSystemAudio()
-        }
-        
+
         let deviceID = deviceManager.getCurrentDevice()
         if deviceID != 0 {
             do {
@@ -101,6 +98,7 @@ class Recorder: ObservableObject {
         
         do {
             recorder = try AVAudioRecorder(url: url, settings: recordSettings)
+            recorder?.delegate = self
             recorder?.isMeteringEnabled = true
             
             if recorder?.record() == false {
@@ -108,10 +106,17 @@ class Recorder: ObservableObject {
                 throw RecorderError.couldNotStartRecording
             }
             
-            audioLevelCheckTask?.cancel()
+            Task { [weak self] in
+                guard let self = self else { return }
+                await self.playbackController.pauseMedia()
+                _ = await self.mediaController.muteSystemAudio()
+            }
             
-            Task {
-                while recorder != nil {
+            audioLevelCheckTask?.cancel()
+            audioMeterUpdateTask?.cancel()
+            
+            audioMeterUpdateTask = Task {
+                while recorder != nil && !Task.isCancelled {
                     updateAudioMeter()
                     try? await Task.sleep(nanoseconds: 33_000_000)
                 }
@@ -147,6 +152,7 @@ class Recorder: ObservableObject {
     
     func stopRecording() {
         audioLevelCheckTask?.cancel()
+        audioMeterUpdateTask?.cancel()
         recorder?.stop()
         recorder = nil
         audioMeter = AudioMeter(averagePower: 0, peakPower: 0)
@@ -196,7 +202,35 @@ class Recorder: ObservableObject {
         audioMeter = newAudioMeter
     }
     
+    // MARK: - AVAudioRecorderDelegate
+    
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        if !flag {
+            logger.error("❌ Recording finished unsuccessfully - file may be corrupted or empty")
+            Task { @MainActor in
+                NotificationManager.shared.showNotification(
+                    title: "Recording failed - audio file corrupted",
+                    type: .error
+                )
+            }
+        }
+    }
+    
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        if let error = error {
+            logger.error("❌ Recording encode error during session: \(error.localizedDescription)")
+            Task { @MainActor in
+                NotificationManager.shared.showNotification(
+                    title: "Recording error: \(error.localizedDescription)",
+                    type: .error
+                )
+            }
+        }
+    }
+    
     deinit {
+        audioLevelCheckTask?.cancel()
+        audioMeterUpdateTask?.cancel()
         if let observer = deviceObserver {
             NotificationCenter.default.removeObserver(observer)
         }

@@ -8,6 +8,7 @@ enum ModelProvider: String, Codable, Hashable, CaseIterable {
     case elevenLabs = "ElevenLabs"
     case deepgram = "Deepgram"
     case mistral = "Mistral"
+    case gemini = "Gemini"
     case custom = "Custom"
     case nativeApple = "Native Apple"
     // Future providers can be added here
@@ -139,3 +140,22 @@ struct LocalModel: TranscriptionModel {
         supportedLanguages.count > 1
     }
 } 
+
+// User-imported local models 
+struct ImportedLocalModel: TranscriptionModel {
+    let id = UUID()
+    let name: String
+    let displayName: String
+    let description: String
+    let provider: ModelProvider = .local
+    let isMultilingualModel: Bool
+    let supportedLanguages: [String: String]
+
+    init(fileBaseName: String) {
+        self.name = fileBaseName
+        self.displayName = fileBaseName
+        self.description = "Imported local model"
+        self.isMultilingualModel = true
+        self.supportedLanguages = PredefinedModels.getLanguageDictionary(isMultilingual: true, provider: .local)
+    }
+}

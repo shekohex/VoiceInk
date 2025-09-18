@@ -7,13 +7,15 @@ import LaunchAtLogin
 struct GeneralSettings: Codable {
     let toggleMiniRecorderShortcut: KeyboardShortcuts.Shortcut?
     let toggleMiniRecorderShortcut2: KeyboardShortcuts.Shortcut?
+    let retryLastTranscriptionShortcut: KeyboardShortcuts.Shortcut?
     let selectedHotkey1RawValue: String?
     let selectedHotkey2RawValue: String?
     let launchAtLoginEnabled: Bool?
     let isMenuBarOnly: Bool?
     let useAppleScriptPaste: Bool?
     let recorderType: String?
-    let doNotMaintainTranscriptHistory: Bool?
+    let isTranscriptionCleanupEnabled: Bool?
+    let transcriptionRetentionMinutes: Int?
     let isAudioCleanupEnabled: Bool?
     let audioRetentionPeriod: Int?
 
@@ -45,8 +47,9 @@ class ImportExportService {
     private let keyIsMenuBarOnly = "IsMenuBarOnly"
     private let keyUseAppleScriptPaste = "UseAppleScriptPaste"
     private let keyRecorderType = "RecorderType"
-    private let keyDoNotMaintainTranscriptHistory = "DoNotMaintainTranscriptHistory"
     private let keyIsAudioCleanupEnabled = "IsAudioCleanupEnabled"
+    private let keyIsTranscriptionCleanupEnabled = "IsTranscriptionCleanupEnabled"
+    private let keyTranscriptionRetentionMinutes = "TranscriptionRetentionMinutes"
     private let keyAudioRetentionPeriod = "AudioRetentionPeriod"
 
     private let keyIsSoundFeedbackEnabled = "isSoundFeedbackEnabled"
@@ -84,13 +87,15 @@ class ImportExportService {
         let generalSettingsToExport = GeneralSettings(
             toggleMiniRecorderShortcut: KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder),
             toggleMiniRecorderShortcut2: KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder2),
+            retryLastTranscriptionShortcut: KeyboardShortcuts.getShortcut(for: .retryLastTranscription),
             selectedHotkey1RawValue: hotkeyManager.selectedHotkey1.rawValue,
             selectedHotkey2RawValue: hotkeyManager.selectedHotkey2.rawValue,
             launchAtLoginEnabled: LaunchAtLogin.isEnabled,
             isMenuBarOnly: menuBarManager.isMenuBarOnly,
             useAppleScriptPaste: UserDefaults.standard.bool(forKey: keyUseAppleScriptPaste),
             recorderType: whisperState.recorderType,
-            doNotMaintainTranscriptHistory: UserDefaults.standard.bool(forKey: keyDoNotMaintainTranscriptHistory),
+            isTranscriptionCleanupEnabled: UserDefaults.standard.bool(forKey: keyIsTranscriptionCleanupEnabled),
+            transcriptionRetentionMinutes: UserDefaults.standard.integer(forKey: keyTranscriptionRetentionMinutes),
             isAudioCleanupEnabled: UserDefaults.standard.bool(forKey: keyIsAudioCleanupEnabled),
             audioRetentionPeriod: UserDefaults.standard.integer(forKey: keyAudioRetentionPeriod),
 
@@ -195,8 +200,8 @@ class ImportExportService {
                     }
 
                     if let itemsToImport = importedSettings.dictionaryItems {
-                        Task {
-                            await whisperPrompt.saveDictionaryItems(itemsToImport)
+                        if let encoded = try? JSONEncoder().encode(itemsToImport) {
+                            UserDefaults.standard.set(encoded, forKey: "CustomDictionaryItems")
                         }
                     } else {
                         print("No dictionary items (for spelling) found in the imported file. Existing items remain unchanged.")
@@ -214,6 +219,9 @@ class ImportExportService {
                         }
                         if let shortcut2 = general.toggleMiniRecorderShortcut2 {
                             KeyboardShortcuts.setShortcut(shortcut2, for: .toggleMiniRecorder2)
+                        }
+                        if let retryShortcut = general.retryLastTranscriptionShortcut {
+                            KeyboardShortcuts.setShortcut(retryShortcut, for: .retryLastTranscription)
                         }
                         if let hotkeyRaw = general.selectedHotkey1RawValue,
                            let hotkey = HotkeyManager.HotkeyOption(rawValue: hotkeyRaw) {
@@ -235,8 +243,12 @@ class ImportExportService {
                         if let recType = general.recorderType {
                             whisperState.recorderType = recType
                         }
-                        if let doNotMaintainHistory = general.doNotMaintainTranscriptHistory {
-                            UserDefaults.standard.set(doNotMaintainHistory, forKey: self.keyDoNotMaintainTranscriptHistory)
+                        
+                        if let transcriptionCleanup = general.isTranscriptionCleanupEnabled {
+                            UserDefaults.standard.set(transcriptionCleanup, forKey: self.keyIsTranscriptionCleanupEnabled)
+                        }
+                        if let transcriptionMinutes = general.transcriptionRetentionMinutes {
+                            UserDefaults.standard.set(transcriptionMinutes, forKey: self.keyTranscriptionRetentionMinutes)
                         }
                         if let audioCleanup = general.isAudioCleanupEnabled {
                             UserDefaults.standard.set(audioCleanup, forKey: self.keyIsAudioCleanupEnabled)

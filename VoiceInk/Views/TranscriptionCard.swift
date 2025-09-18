@@ -7,6 +7,7 @@ struct TranscriptionCard: View {
     let isSelected: Bool
     let onDelete: () -> Void
     let onToggleSelection: () -> Void
+    @State private var isAIRequestExpanded: Bool = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -77,6 +78,63 @@ struct TranscriptionCard: View {
                     }
                 }
                 
+                // NEW: AI Request payload (System + User messages) - folded by default
+                if isExpanded, (transcription.aiRequestSystemMessage != nil || transcription.aiRequestUserMessage != nil) {
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "paperplane.fill")
+                                .foregroundColor(.purple)
+                            Text("AI Request")
+                                .fontWeight(.semibold)
+                                .foregroundColor(.purple)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.easeInOut) {
+                                isAIRequestExpanded.toggle()
+                            }
+                        }
+
+                        if isAIRequestExpanded {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if let systemMsg = transcription.aiRequestSystemMessage, !systemMsg.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text("System Prompt")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            AnimatedCopyButton(textToCopy: systemMsg)
+                                        }
+                                        Text(systemMsg)
+                                            .font(.system(size: 13, weight: .regular, design: .monospaced))
+                                            .lineSpacing(2)
+                                    }
+                                }
+                                
+                                if let userMsg = transcription.aiRequestUserMessage, !userMsg.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text("User Message")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                            AnimatedCopyButton(textToCopy: userMsg)
+                                        }
+                                        Text(userMsg)
+                                            .font(.system(size: 13, weight: .regular, design: .monospaced))
+                                            .lineSpacing(2)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 // Audio player (if available)
                 if isExpanded, let urlString = transcription.audioFileURL,
                    let url = URL(string: urlString),
@@ -98,6 +156,9 @@ struct TranscriptionCard: View {
                         }
                         if let aiModel = transcription.aiEnhancementModelName {
                             metadataRow(icon: "sparkles", label: "Enhancement Model", value: aiModel)
+                        }
+                        if let promptName = transcription.promptName {
+                            metadataRow(icon: "text.bubble.fill", label: "Prompt Used", value: promptName)
                         }
                         if let duration = transcription.transcriptionDuration {
                             metadataRow(icon: "clock.fill", label: "Transcription Time", value: formatTiming(duration))
@@ -139,6 +200,7 @@ struct TranscriptionCard: View {
     private var hasMetadata: Bool {
         transcription.transcriptionModelName != nil ||
         transcription.aiEnhancementModelName != nil ||
+        transcription.promptName != nil ||
         transcription.transcriptionDuration != nil ||
         transcription.enhancementDuration != nil
     }
