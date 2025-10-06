@@ -111,8 +111,18 @@ class AudioTranscriptionManager: ObservableObject {
                 }
                 
                 let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
+                text = TranscriptionOutputFilter.filter(text)
                 text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                
+
+                let powerModeManager = PowerModeManager.shared
+                let activePowerModeConfig = powerModeManager.currentActiveConfiguration
+                let powerModeName = (activePowerModeConfig?.isEnabled == true) ? activePowerModeConfig?.name : nil
+                let powerModeEmoji = (activePowerModeConfig?.isEnabled == true) ? activePowerModeConfig?.emoji : nil
+
+                if UserDefaults.standard.object(forKey: "IsTextFormattingEnabled") as? Bool ?? true {
+                    text = WhisperTextFormatter.format(text)
+                }
+
                 // Apply word replacements if enabled
                 if UserDefaults.standard.bool(forKey: "IsWordReplacementEnabled") {
                     text = WordReplacementService.shared.applyReplacements(to: text)
@@ -137,7 +147,9 @@ class AudioTranscriptionManager: ObservableObject {
                             transcriptionDuration: transcriptionDuration,
                             enhancementDuration: enhancementDuration,
                             aiRequestSystemMessage: enhancementService.lastSystemMessageSent,
-                            aiRequestUserMessage: enhancementService.lastUserMessageSent
+                            aiRequestUserMessage: enhancementService.lastUserMessageSent,
+                            powerModeName: powerModeName,
+                            powerModeEmoji: powerModeEmoji
                         )
                         modelContext.insert(transcription)
                         try modelContext.save()
@@ -151,7 +163,9 @@ class AudioTranscriptionManager: ObservableObject {
                             audioFileURL: permanentURL.absoluteString,
                             transcriptionModelName: currentModel.displayName,
                             promptName: nil,
-                            transcriptionDuration: transcriptionDuration
+                            transcriptionDuration: transcriptionDuration,
+                            powerModeName: powerModeName,
+                            powerModeEmoji: powerModeEmoji
                         )
                         modelContext.insert(transcription)
                         try modelContext.save()
@@ -165,7 +179,9 @@ class AudioTranscriptionManager: ObservableObject {
                         audioFileURL: permanentURL.absoluteString,
                         transcriptionModelName: currentModel.displayName,
                         promptName: nil,
-                        transcriptionDuration: transcriptionDuration
+                        transcriptionDuration: transcriptionDuration,
+                        powerModeName: powerModeName,
+                        powerModeEmoji: powerModeEmoji
                     )
                     modelContext.insert(transcription)
                     try modelContext.save()

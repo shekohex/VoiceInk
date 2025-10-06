@@ -80,7 +80,12 @@ class AIEnhancementService: ObservableObject {
         self.useClipboardContext = UserDefaults.standard.bool(forKey: "useClipboardContext")
         self.useScreenCaptureContext = UserDefaults.standard.bool(forKey: "useScreenCaptureContext")
 
-        self.customPrompts = PromptMigrationService.migratePromptsIfNeeded()
+        if let savedPromptsData = UserDefaults.standard.data(forKey: "customPrompts"),
+           let decodedPrompts = try? JSONDecoder().decode([CustomPrompt].self, from: savedPromptsData) {
+            self.customPrompts = decodedPrompts
+        } else {
+            self.customPrompts = []
+        }
 
         if let savedPromptId = UserDefaults.standard.string(forKey: "selectedPromptId") {
             self.selectedPromptId = UUID(uuidString: savedPromptId)
@@ -132,24 +137,28 @@ class AIEnhancementService: ObservableObject {
     }
 
     private func getSystemMessage(for mode: EnhancementPrompt) -> String {
+        let clipboardSnapshot = NSPasteboard.general.string(forType: .string)
         let selectedText = SelectedTextService.fetchSelectedText()
 
-        if let activePrompt = activePrompt,
-           activePrompt.id == PredefinedPrompts.assistantPromptId,
-           let selectedText = selectedText, !selectedText.isEmpty {
+        if let selectedText = selectedText, !selectedText.isEmpty {
+            let generalContextSection = "\n\n<CONTEXT_INFORMATION>\n\(selectedText)\n</CONTEXT_INFORMATION>"
 
-            let selectedTextContext = "\n\nSelected Text: \(selectedText)"
-            let generalContextSection = "\n\n<CONTEXT_INFORMATION>\(selectedTextContext)\n</CONTEXT_INFORMATION>"
-            let dictionaryContextSection = if !dictionaryContextService.getDictionaryContext().isEmpty {
-                "\n\n<DICTIONARY_CONTEXT>\(dictionaryContextService.getDictionaryContext())\n</DICTIONARY_CONTEXT>"
+            if let activePrompt = activePrompt {
+                if activePrompt.id == PredefinedPrompts.assistantPromptId {
+                    return activePrompt.promptText + generalContextSection
+                } else {
+                    return activePrompt.finalPromptText + generalContextSection
+                }
             } else {
-                ""
+                if let defaultPrompt = allPrompts.first(where: { $0.id == PredefinedPrompts.defaultPromptId }) {
+                    return defaultPrompt.finalPromptText + generalContextSection
+                }
+                return AIPrompts.assistantMode + generalContextSection
             }
-            return activePrompt.promptText + generalContextSection + dictionaryContextSection
         }
 
         let clipboardContext = if useClipboardContext,
-                              let clipboardText = NSPasteboard.general.string(forType: .string),
+                              let clipboardText = clipboardSnapshot ?? NSPasteboard.general.string(forType: .string),
                               !clipboardText.isEmpty {
             "\n\n<CLIPBOARD_CONTEXT>\n\(clipboardText)\n</CLIPBOARD_CONTEXT>"
         } else {
@@ -159,18 +168,14 @@ class AIEnhancementService: ObservableObject {
         let screenCaptureContext = if useScreenCaptureContext,
                                    let capturedText = screenCaptureService.lastCapturedText,
                                    !capturedText.isEmpty {
-            "\n\nActive Window Context: \(capturedText)"
+            "\n\n<CURRENT_WINDOW_CONTEXT>\n\(capturedText)\n</CURRENT_WINDOW_CONTEXT>"
         } else {
             ""
         }
 
         let dictionaryContext = dictionaryContextService.getDictionaryContext()
 
-        let generalContextSection = if !clipboardContext.isEmpty || !screenCaptureContext.isEmpty {
-            "\n\n<CONTEXT_INFORMATION>\(clipboardContext)\(screenCaptureContext)\n</CONTEXT_INFORMATION>"
-        } else {
-            ""
-        }
+        let generalContextSection = clipboardContext + screenCaptureContext
 
         let dictionaryContextSection = if !dictionaryContext.isEmpty {
             "\n\n<DICTIONARY_CONTEXT>\(dictionaryContext)\n</DICTIONARY_CONTEXT>"
@@ -180,7 +185,7 @@ class AIEnhancementService: ObservableObject {
 
         guard let activePrompt = activePrompt else {
             if let defaultPrompt = allPrompts.first(where: { $0.id == PredefinedPrompts.defaultPromptId }) {
-                var systemMessage = String(format: AIPrompts.customPromptTemplate, defaultPrompt.promptText)
+                var systemMessage = defaultPrompt.finalPromptText
                 systemMessage += generalContextSection + dictionaryContextSection
                 return systemMessage
             }
@@ -191,7 +196,7 @@ class AIEnhancementService: ObservableObject {
             return activePrompt.promptText + generalContextSection + dictionaryContextSection
         }
 
-        var systemMessage = String(format: AIPrompts.customPromptTemplate, activePrompt.promptText)
+        var systemMessage = activePrompt.finalPromptText
         systemMessage += generalContextSection + dictionaryContextSection
         return systemMessage
     }
@@ -209,8 +214,10 @@ class AIEnhancementService: ObservableObject {
         let systemMessage = getSystemMessage(for: mode)
         
         // Persist the exact payload being sent (also used for UI)
-        self.lastSystemMessageSent = systemMessage
-        self.lastUserMessageSent = formattedText
+        await MainActor.run {
+            self.lastSystemMessageSent = systemMessage
+            self.lastUserMessageSent = formattedText
+        }
 
         // Log the message being sent to AI enhancement
         logger.notice("AI Enhancement - System Message: \(systemMessage, privacy: .public)")
@@ -414,8 +421,8 @@ class AIEnhancementService: ObservableObject {
         }
     }
 
-    func addPrompt(title: String, promptText: String, icon: PromptIcon = .documentFill, description: String? = nil, triggerWords: [String] = []) {
-        let newPrompt = CustomPrompt(title: title, promptText: promptText, icon: icon, description: description, isPredefined: false, triggerWords: triggerWords)
+    func addPrompt(title: String, promptText: String, icon: PromptIcon = .documentFill, description: String? = nil, triggerWords: [String] = [], useSystemInstructions: Bool = true) {
+        let newPrompt = CustomPrompt(title: title, promptText: promptText, icon: icon, description: description, isPredefined: false, triggerWords: triggerWords, useSystemInstructions: useSystemInstructions)
         customPrompts.append(newPrompt)
         if customPrompts.count == 1 {
             selectedPromptId = newPrompt.id
@@ -453,7 +460,8 @@ class AIEnhancementService: ObservableObject {
                     icon: template.icon,
                     description: template.description,
                     isPredefined: true,
-                    triggerWords: updatedPrompt.triggerWords
+                    triggerWords: updatedPrompt.triggerWords,
+                    useSystemInstructions: template.useSystemInstructions
                 )
                 customPrompts[existingIndex] = updatedPrompt
             } else {
