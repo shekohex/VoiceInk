@@ -3,7 +3,7 @@ import os
 
 class PromptDetectionService {
     private let logger = Logger(
-        subsystem: "com.prakashjoshipax.VoiceInk",
+        subsystem: "com.prakashjoshipax.voiceink",
         category: "promptdetection"
     )
     
@@ -16,6 +16,7 @@ class PromptDetectionService {
         let originalPromptId: UUID?
     }
     
+    @MainActor
     func analyzeText(_ text: String, with enhancementService: AIEnhancementService) -> PromptDetectionResult {
         let originalEnhancementState = enhancementService.isEnhancementEnabled
         let originalPromptId = enhancementService.selectedPromptId

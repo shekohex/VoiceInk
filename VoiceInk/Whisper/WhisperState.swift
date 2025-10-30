@@ -59,7 +59,7 @@ class WhisperState: NSObject, ObservableObject {
     private var localTranscriptionService: LocalTranscriptionService!
     private lazy var cloudTranscriptionService = CloudTranscriptionService()
     private lazy var nativeAppleTranscriptionService = NativeAppleTranscriptionService()
-    internal lazy var parakeetTranscriptionService = ParakeetTranscriptionService(customModelsDirectory: parakeetModelsDirectory)
+    internal lazy var parakeetTranscriptionService = ParakeetTranscriptionService()
     
     private var modelUrl: URL? {
         let possibleURLs = [
@@ -82,7 +82,6 @@ class WhisperState: NSObject, ObservableObject {
     
     let modelsDirectory: URL
     let recordingsDirectory: URL
-    let parakeetModelsDirectory: URL
     let enhancementService: AIEnhancementService?
     var licenseViewModel: LicenseViewModel
     let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "WhisperState")
@@ -91,7 +90,7 @@ class WhisperState: NSObject, ObservableObject {
     
     // For model progress tracking
     @Published var downloadProgress: [String: Double] = [:]
-    @Published var isDownloadingParakeet = false
+    @Published var parakeetDownloadStates: [String: Bool] = [:]
     
     init(modelContext: ModelContext, enhancementService: AIEnhancementService? = nil) {
         self.modelContext = modelContext
@@ -100,7 +99,6 @@ class WhisperState: NSObject, ObservableObject {
         
         self.modelsDirectory = appSupportDirectory.appendingPathComponent("WhisperModels")
         self.recordingsDirectory = appSupportDirectory.appendingPathComponent("Recordings")
-        self.parakeetModelsDirectory = appSupportDirectory.appendingPathComponent("ParakeetModels")
         
         self.enhancementService = enhancementService
         self.licenseViewModel = LicenseViewModel()
@@ -200,12 +198,12 @@ class WhisperState: NSObject, ObservableObject {
                                         self.logger.error("❌ Model loading failed: \(error.localizedDescription)")
                                     }
                                 }
-                            } else if let model = self.currentTranscriptionModel, model.provider == .parakeet {
-                                try? await self.parakeetTranscriptionService.loadModel()
+                            } else if let parakeetModel = self.currentTranscriptionModel as? ParakeetModel {
+                                try? await self.parakeetTranscriptionService.loadModel(for: parakeetModel)
                             }
         
-                            if let enhancementService = self.enhancementService,
-                               enhancementService.useScreenCaptureContext {
+                            if let enhancementService = self.enhancementService {
+                                enhancementService.captureClipboardContext()
                                 await enhancementService.captureScreenContext()
                             }
         
@@ -295,7 +293,9 @@ class WhisperState: NSObject, ObservableObject {
 
             let transcriptionStart = Date()
             var text = try await transcriptionService.transcribe(audioURL: url, model: model)
+            logger.notice("📝 Raw transcript: \(text)")
             text = TranscriptionOutputFilter.filter(text)
+            logger.notice("📝 Output filter result: \(text)")
             let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
 
             let powerModeManager = PowerModeManager.shared
@@ -309,10 +309,12 @@ class WhisperState: NSObject, ObservableObject {
 
             if UserDefaults.standard.object(forKey: "IsTextFormattingEnabled") as? Bool ?? true {
                 text = WhisperTextFormatter.format(text)
+                logger.notice("📝 Formatted transcript: \(text)")
             }
 
             if UserDefaults.standard.bool(forKey: "IsWordReplacementEnabled") {
                 text = WordReplacementService.shared.applyReplacements(to: text)
+                logger.notice("📝 WordReplacement: \(text)")
             }
 
             let audioAsset = AVURLAsset(url: url)
@@ -327,7 +329,7 @@ class WhisperState: NSObject, ObservableObject {
             finalPastedText = text
             
             if let enhancementService = enhancementService, enhancementService.isConfigured {
-                let detectionResult = promptDetectionService.analyzeText(text, with: enhancementService)
+                let detectionResult = await promptDetectionService.analyzeText(text, with: enhancementService)
                 promptDetectionResult = detectionResult
                 await promptDetectionService.applyDetectionResult(detectionResult, to: enhancementService)
             }
@@ -342,6 +344,7 @@ class WhisperState: NSObject, ObservableObject {
                 
                 do {
                     let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(textForAI)
+                    logger.notice("📝 AI enhancement: \(enhancedText)")
                     transcription.enhancedText = enhancedText
                     transcription.aiEnhancementModelName = enhancementService.getAIService()?.currentModel
                     transcription.promptName = promptName
@@ -369,7 +372,10 @@ class WhisperState: NSObject, ObservableObject {
 
         // --- Finalize and save ---
         try? modelContext.save()
-        NotificationCenter.default.post(name: .transcriptionCreated, object: transcription)
+        
+        if transcription.transcriptionStatus == TranscriptionStatus.completed.rawValue {
+            NotificationCenter.default.post(name: .transcriptionCompleted, object: transcription)
+        }
 
         if await checkCancellationAndCleanup() { return }
 
@@ -426,4 +432,3 @@ class WhisperState: NSObject, ObservableObject {
         await dismissMiniRecorder()
     }
 }
-

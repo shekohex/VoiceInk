@@ -11,6 +11,7 @@ enum AIProvider: String, CaseIterable {
     case mistral = "Mistral"
     case elevenLabs = "ElevenLabs"
     case deepgram = "Deepgram"
+    case soniox = "Soniox"
     case ollama = "Ollama"
     case custom = "Custom"
     
@@ -35,6 +36,8 @@ enum AIProvider: String, CaseIterable {
             return "https://api.elevenlabs.io/v1/speech-to-text"
         case .deepgram:
             return "https://api.deepgram.com/v1/listen"
+        case .soniox:
+            return "https://api.soniox.com/v1"
         case .ollama:
             return UserDefaults.standard.string(forKey: "ollamaBaseURL") ?? "http://localhost:11434"
         case .custom:
@@ -49,9 +52,9 @@ enum AIProvider: String, CaseIterable {
         case .groq:
             return "qwen/qwen3-32b"
         case .gemini:
-            return "gemini-2.0-flash-lite"
+            return "gemini-2.5-flash-lite"
         case .anthropic:
-            return "claude-sonnet-4-0"
+            return "claude-haiku-4-5"
         case .openAI:
             return "gpt-5-mini"
         case .mistral:
@@ -60,6 +63,8 @@ enum AIProvider: String, CaseIterable {
             return "scribe_v1"
         case .deepgram:
             return "whisper-1"
+        case .soniox:
+            return "stt-async-v3"
         case .ollama:
             return UserDefaults.standard.string(forKey: "ollamaSelectedModel") ?? "mistral"
         case .custom:
@@ -81,29 +86,27 @@ enum AIProvider: String, CaseIterable {
             ]
         case .groq:
             return [
+                "llama-3.1-8b-instant",
                 "llama-3.3-70b-versatile",
                 "moonshotai/kimi-k2-instruct-0905",
                 "qwen/qwen3-32b",
                 "meta-llama/llama-4-maverick-17b-128e-instruct",
-                "openai/gpt-oss-120b"
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b"
             ]
         case .gemini:
             return [
                 "gemini-2.5-pro",
                 "gemini-2.5-flash",
                 "gemini-2.5-flash-lite",
-                "gemini-2.5-flash-preview-09-2025",
-                "gemini-2.5-flash-lite-preview-09-2025",
-                "gemini-2.0-flash",
-                "gemini-2.0-flash-lite"
+                "gemini-2.0-flash-001"
             ]
         case .anthropic:
             return [
                 "claude-opus-4-0",
                 "claude-sonnet-4-0",
-                "claude-3-7-sonnet-latest",
-                "claude-3-5-haiku-latest",
-                "claude-3-5-sonnet-latest"
+                "claude-sonnet-4-5",
+                "claude-haiku-4-5"
             ]
         case .openAI:
             return [
@@ -124,6 +127,8 @@ enum AIProvider: String, CaseIterable {
             return ["scribe_v1", "scribe_v1_experimental"]
         case .deepgram:
             return ["whisper-1"]
+        case .soniox:
+            return ["stt-async-v3"]
         case .ollama:
             return []
         case .custom:
@@ -310,6 +315,8 @@ class AIService: ObservableObject {
             verifyDeepgramAPIKey(key, completion: completion)
         case .mistral:
             verifyMistralAPIKey(key, completion: completion)
+        case .soniox:
+            verifySonioxAPIKey(key, completion: completion)
         default:
             verifyOpenAICompatibleAPIKey(key, completion: completion)
         }
@@ -452,6 +459,31 @@ class AIService: ObservableObject {
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
                 self.logger.error("Deepgram API key verification failed: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                completion(httpResponse.statusCode == 200)
+            } else {
+                completion(false)
+            }
+        }.resume()
+    }
+    
+    private func verifySonioxAPIKey(_ key: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "https://api.soniox.com/v1/files") else {
+            completion(false)
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if let error = error {
+                self.logger.error("Soniox API key verification failed: \(error.localizedDescription)")
                 completion(false)
                 return
             }

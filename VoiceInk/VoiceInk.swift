@@ -4,6 +4,7 @@ import Sparkle
 import AppKit
 import OSLog
 import AppIntents
+import FluidAudio
 
 @main
 struct VoiceInkApp: App {
@@ -27,6 +28,14 @@ struct VoiceInkApp: App {
     private let transcriptionAutoCleanupService = TranscriptionAutoCleanupService.shared
     
     init() {
+        // Configure FluidAudio logging subsystem
+        AppLogger.defaultSubsystem = "com.prakashjoshipax.voiceink.parakeet"
+
+        if UserDefaults.standard.object(forKey: "powerModeUIFlag") == nil {
+            let hasEnabledPowerModes = PowerModeManager.shared.configurations.contains { $0.isEnabled }
+            UserDefaults.standard.set(hasEnabledPowerModes, forKey: "powerModeUIFlag")
+        }
+
         do {
             let schema = Schema([
                 Transcription.self
@@ -155,6 +164,7 @@ struct VoiceInkApp: App {
                     })
             }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) { }
             
@@ -250,6 +260,3 @@ struct WindowAccessor: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
-
-
-

@@ -19,7 +19,7 @@ class AudioTranscriptionService: ObservableObject {
     private let localTranscriptionService: LocalTranscriptionService
     private lazy var cloudTranscriptionService = CloudTranscriptionService()
     private lazy var nativeAppleTranscriptionService = NativeAppleTranscriptionService()
-    private lazy var parakeetTranscriptionService = ParakeetTranscriptionService(customModelsDirectory: whisperState.parakeetModelsDirectory)
+    private lazy var parakeetTranscriptionService = ParakeetTranscriptionService()
     
     enum TranscriptionError: Error {
         case noAudioFile
@@ -106,7 +106,7 @@ class AudioTranscriptionService: ObservableObject {
             var promptDetectionResult: PromptDetectionService.PromptDetectionResult? = nil
 
             if let enhancementService = enhancementService, enhancementService.isConfigured {
-                let detectionResult = promptDetectionService.analyzeText(text, with: enhancementService)
+                let detectionResult = await promptDetectionService.analyzeText(text, with: enhancementService)
                 promptDetectionResult = detectionResult
                 await promptDetectionService.applyDetectionResult(detectionResult, to: enhancementService)
             }
