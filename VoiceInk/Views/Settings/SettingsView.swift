@@ -11,14 +11,18 @@ struct SettingsView: View {
     @EnvironmentObject private var whisperState: WhisperState
     @EnvironmentObject private var enhancementService: AIEnhancementService
     @StateObject private var deviceManager = AudioDeviceManager.shared
+    @ObservedObject private var soundManager = SoundManager.shared
     @ObservedObject private var mediaController = MediaController.shared
     @ObservedObject private var playbackController = PlaybackController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
     @AppStorage("autoUpdateCheck") private var autoUpdateCheck = true
     @AppStorage("enableAnnouncements") private var enableAnnouncements = true
+    @AppStorage("restoreClipboardAfterPaste") private var restoreClipboardAfterPaste = false
+    @AppStorage("clipboardRestoreDelay") private var clipboardRestoreDelay = 1.5
     @State private var showResetOnboardingAlert = false
     @State private var currentShortcut = KeyboardShortcuts.getShortcut(for: .toggleMiniRecorder)
     @State private var isCustomCancelEnabled = false
+    @State private var isCustomSoundsExpanded = false
 
     
     var body: some View {
@@ -172,9 +176,9 @@ struct SettingsView: View {
                         // Middle-Click Toggle
                         VStack(alignment: .leading, spacing: 12) {
                             HStack(spacing: 8) {
-                                Toggle("Enable Middle-Click Toggle", isOn: $hotkeyManager.isMiddleClickToggleEnabled.animation())
+                                Toggle("Enable Middle-Click Toggle", isOn: $hotkeyManager.isMiddleClickToggleEnabled)
                                     .toggleStyle(.switch)
-                                
+
                                 InfoTip(
                                     title: "Middle-Click Toggle",
                                     message: "Use middle mouse button to toggle VoiceInk recording."
@@ -186,7 +190,7 @@ struct SettingsView: View {
                                     Text("Activation Delay")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(.secondary)
-                                    
+
                                     TextField("", value: $hotkeyManager.middleClickActivationDelay, formatter: {
                                         let formatter = NumberFormatter()
                                         formatter.numberStyle = .none
@@ -198,14 +202,13 @@ struct SettingsView: View {
                                     .background(Color(NSColor.textBackgroundColor))
                                     .cornerRadius(5)
                                     .frame(width: 70)
-                                    
+
                                     Text("ms")
                                         .foregroundColor(.secondary)
-                                    
+
                                     Spacer()
                                 }
                                 .padding(.leading, 16)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                         }
                     }
@@ -217,13 +220,38 @@ struct SettingsView: View {
                     subtitle: "Customize app & system feedback"
                 ) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: .init(
-                            get: { SoundManager.shared.isEnabled },
-                            set: { SoundManager.shared.isEnabled = $0 }
-                        )) {
-                            Text("Sound feedback")
+                        HStack {
+                            Toggle(isOn: $soundManager.isEnabled) {
+                                Text("Sound feedback")
+                            }
+                            .toggleStyle(.switch)
+
+                            if soundManager.isEnabled {
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                                    .rotationEffect(.degrees(isCustomSoundsExpanded ? 90 : 0))
+                                    .animation(.easeInOut(duration: 0.2), value: isCustomSoundsExpanded)
+                            }
                         }
-                        .toggleStyle(.switch)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if soundManager.isEnabled {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isCustomSoundsExpanded.toggle()
+                                }
+                            }
+                        }
+
+                        if soundManager.isEnabled && isCustomSoundsExpanded {
+                            CustomSoundSettingsView()
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                                .padding(.top, 4)
+                        }
+
+                        Divider()
 
                         Toggle(isOn: $mediaController.isSystemMuteEnabled) {
                             Text("Mute system audio during recording")
@@ -231,14 +259,41 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .help("Automatically mute system audio when recording starts and restore when recording stops")
 
-                        Toggle(isOn: Binding(
-                            get: { UserDefaults.standard.bool(forKey: "preserveTranscriptInClipboard") },
-                            set: { UserDefaults.standard.set($0, forKey: "preserveTranscriptInClipboard") }
-                        )) {
-                            Text("Preserve transcript in clipboard")
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Toggle("Restore clipboard after paste", isOn: $restoreClipboardAfterPaste)
+                                    .toggleStyle(.switch)
+
+                                InfoTip(
+                                    title: "Restore Clipboard",
+                                    message: "When enabled, VoiceInk will restore your original clipboard content after pasting the transcription."
+                                )
+                            }
+
+                            if restoreClipboardAfterPaste {
+                                HStack(spacing: 8) {
+                                    Text("Restore Delay")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.secondary)
+
+                                    Picker("", selection: $clipboardRestoreDelay) {
+                                        Text("0.5s").tag(0.5)
+                                        Text("1.0s").tag(1.0)
+                                        Text("1.5s").tag(1.5)
+                                        Text("2.0s").tag(2.0)
+                                        Text("2.5s").tag(2.5)
+                                        Text("3.0s").tag(3.0)
+                                        Text("4.0s").tag(4.0)
+                                        Text("5.0s").tag(5.0)
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 90)
+
+                                    Spacer()
+                                }
+                                .padding(.leading, 16)
+                            }
                         }
-                        .toggleStyle(.switch)
-                        .help("Keep the transcribed text in clipboard instead of restoring the original clipboard content")
 
                     }
                 }
@@ -273,7 +328,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Select the method used to paste text. Use AppleScript if you have a non-standard keyboard layout.")
                             .settingsDescription()
-                        
+
                         Toggle("Use AppleScript Paste Method", isOn: Binding(
                             get: { UserDefaults.standard.bool(forKey: "UseAppleScriptPaste") },
                             set: { UserDefaults.standard.set($0, forKey: "UseAppleScriptPaste") }

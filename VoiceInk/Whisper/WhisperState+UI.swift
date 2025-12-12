@@ -12,13 +12,11 @@ extension WhisperState {
         if recorderType == "notch" {
             if notchWindowManager == nil {
                 notchWindowManager = NotchWindowManager(whisperState: self, recorder: recorder)
-                logger.info("Created new notch window manager")
             }
             notchWindowManager?.show()
         } else {
             if miniWindowManager == nil {
                 miniWindowManager = MiniWindowManager(whisperState: self, recorder: recorder)
-                logger.info("Created new mini window manager")
             }
             miniWindowManager?.show()
         }
@@ -44,11 +42,11 @@ extension WhisperState {
         } else {
             SoundManager.shared.playStartSound()
 
-            await toggleRecord()
-
             await MainActor.run {
                 isMiniRecorderVisible = true // This will call showRecorderPanel() via didSet
             }
+
+            await toggleRecord()
         }
     }
     

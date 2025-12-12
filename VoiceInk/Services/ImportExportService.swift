@@ -24,6 +24,8 @@ struct GeneralSettings: Codable {
     let isPauseMediaEnabled: Bool?
     let isTextFormattingEnabled: Bool?
     let isExperimentalFeaturesEnabled: Bool?
+    let restoreClipboardAfterPaste: Bool?
+    let clipboardRestoreDelay: Double?
 }
 
 struct VoiceInkExportedSettings: Codable {
@@ -40,7 +42,7 @@ struct VoiceInkExportedSettings: Codable {
 class ImportExportService {
     static let shared = ImportExportService()
     private let currentSettingsVersion: String
-    private let dictionaryItemsKey = "CustomDictionaryItems"
+    private let dictionaryItemsKey = "CustomVocabularyItems"
     private let wordReplacementsKey = "wordReplacements"
 
 
@@ -103,7 +105,9 @@ class ImportExportService {
             isSystemMuteEnabled: mediaController.isSystemMuteEnabled,
             isPauseMediaEnabled: playbackController.isPauseMediaEnabled,
             isTextFormattingEnabled: UserDefaults.standard.object(forKey: keyIsTextFormattingEnabled) as? Bool ?? true,
-            isExperimentalFeaturesEnabled: UserDefaults.standard.bool(forKey: "isExperimentalFeaturesEnabled")
+            isExperimentalFeaturesEnabled: UserDefaults.standard.bool(forKey: "isExperimentalFeaturesEnabled"),
+            restoreClipboardAfterPaste: UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste"),
+            clipboardRestoreDelay: UserDefaults.standard.double(forKey: "clipboardRestoreDelay")
         )
 
         let exportedSettings = VoiceInkExportedSettings(
@@ -201,10 +205,10 @@ class ImportExportService {
 
                     if let itemsToImport = importedSettings.dictionaryItems {
                         if let encoded = try? JSONEncoder().encode(itemsToImport) {
-                            UserDefaults.standard.set(encoded, forKey: "CustomDictionaryItems")
+                            UserDefaults.standard.set(encoded, forKey: "CustomVocabularyItems")
                         }
                     } else {
-                        print("No dictionary items (for spelling) found in the imported file. Existing items remain unchanged.")
+                        print("No custom vocabulary items (for spelling) found in the imported file. Existing items remain unchanged.")
                     }
 
                     if let replacementsToImport = importedSettings.wordReplacements {
@@ -274,6 +278,12 @@ class ImportExportService {
                         }
                         if let textFormattingEnabled = general.isTextFormattingEnabled {
                             UserDefaults.standard.set(textFormattingEnabled, forKey: self.keyIsTextFormattingEnabled)
+                        }
+                        if let restoreClipboard = general.restoreClipboardAfterPaste {
+                            UserDefaults.standard.set(restoreClipboard, forKey: "restoreClipboardAfterPaste")
+                        }
+                        if let clipboardDelay = general.clipboardRestoreDelay {
+                            UserDefaults.standard.set(clipboardDelay, forKey: "clipboardRestoreDelay")
                         }
                     }
 

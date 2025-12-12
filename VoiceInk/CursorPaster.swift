@@ -2,17 +2,16 @@ import Foundation
 import AppKit
 
 class CursorPaster {
-    
+
     static func pasteAtCursor(_ text: String) {
         let pasteboard = NSPasteboard.general
-        let preserveTranscript = UserDefaults.standard.bool(forKey: "preserveTranscriptInClipboard")
-        
+        let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste")
+
         var savedContents: [(NSPasteboard.PasteboardType, Data)] = []
-        
-        // Only save clipboard contents if we plan to restore them
-        if !preserveTranscript {
+
+        if shouldRestoreClipboard {
             let currentItems = pasteboard.pasteboardItems ?? []
-            
+
             for item in currentItems {
                 for type in item.types {
                     if let data = item.data(forType: type) {
@@ -21,19 +20,22 @@ class CursorPaster {
                 }
             }
         }
-        
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-        
-        if UserDefaults.standard.bool(forKey: "UseAppleScriptPaste") {
-            _ = pasteUsingAppleScript()
-        } else {
-            pasteUsingCommandV()
+
+        ClipboardManager.setClipboard(text, transient: shouldRestoreClipboard)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            if UserDefaults.standard.bool(forKey: "UseAppleScriptPaste") {
+                _ = pasteUsingAppleScript()
+            } else {
+                pasteUsingCommandV()
+            }
         }
-        
-        // Only restore clipboard if preserve setting is disabled
-        if !preserveTranscript {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+
+        if shouldRestoreClipboard {
+            let restoreDelay = UserDefaults.standard.double(forKey: "clipboardRestoreDelay")
+            let delay = restoreDelay > 0 ? restoreDelay : 1.5
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 if !savedContents.isEmpty {
                     pasteboard.clearContents()
                     for (type, data) in savedContents {
