@@ -422,7 +422,7 @@ struct VoiceInkApp: App {
                 title: String(localized: "No mode configured"),
                 type: .warning,
                 duration: 7.0,
-                actionButton: (String(localized: "Set Up Mode"), ModeSetupNavigator.openModesSettings)
+                actionButton: (String(localized: "Manage Modes"), ModeSetupNavigator.openModesSettings)
             )
         }
     }

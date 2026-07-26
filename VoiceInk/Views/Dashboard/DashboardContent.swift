@@ -869,7 +869,7 @@ private struct DashboardNoModesReminder: View {
 
             Spacer(minLength: 12)
 
-            Button("Set Up Mode", action: onOpenModes)
+            Button("Manage Modes", action: onOpenModes)
                 .controlSize(.small)
                 .help("Open Modes settings")
         }
