@@ -122,10 +122,6 @@ struct ModeConfigEditorView: View {
             return
         }
 
-        if config.isDefault {
-            modeManager.setAsDefault(configId: config.id, skipSave: true)
-        }
-
         switch mode {
         case .add:
             modeManager.addConfiguration(config)
@@ -137,9 +133,15 @@ struct ModeConfigEditorView: View {
         onDismiss()
     }
 
-    private func deleteConfiguration() {
-        modeManager.removeConfiguration(with: draft.id)
-        onDismiss()
+    private func deleteConfiguration() -> ModeRemovalResult {
+        let result = modeManager.removeConfiguration(with: draft.id)
+        switch result {
+        case .removed, .notFound:
+            onDismiss()
+        case .blockedDefault:
+            break
+        }
+        return result
     }
 
     private func cleanupUnsavedShortcutIfNeeded() {
