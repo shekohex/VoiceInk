@@ -82,6 +82,8 @@ struct OnboardingBottomBar: View {
     var placement: OnboardingBottomBarPlacement = .split
     let onLeading: (() -> Void)?
     let onPrimary: () -> Void
+    var skipTitle: String? = nil
+    var onSkip: (() -> Void)? = nil
 
     private enum Metrics {
         static let controlButtonWidth: CGFloat = 132
@@ -89,19 +91,23 @@ struct OnboardingBottomBar: View {
         static let primaryButtonHorizontalPadding: CGFloat = 20
     }
 
+    @ViewBuilder
     var body: some View {
-        HStack(spacing: 0) {
-            switch placement {
-            case .split:
-                leadingSlot
-                Spacer(minLength: 0)
-            case .centered:
-                Spacer(minLength: 0)
+        switch placement {
+        case .split:
+            ZStack {
+                HStack(spacing: 0) {
+                    leadingSlot
+                    Spacer(minLength: 0)
+                    primaryButton
+                }
+
+                skipButton
             }
-
-            primaryButton
-
-            if case .centered = placement {
+        case .centered:
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                primaryButton
                 Spacer(minLength: 0)
             }
         }
@@ -122,6 +128,21 @@ struct OnboardingBottomBar: View {
             AppTheme.Surface.clear
                 .frame(width: Metrics.controlButtonWidth, height: Metrics.buttonHeight)
                 .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder
+    private var skipButton: some View {
+        if let skipTitle, let onSkip {
+            Button(action: onSkip) {
+                Text(LocalizedStringKey(skipTitle))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(AppTheme.Text.secondary)
+                    .padding(.horizontal, 4)
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
