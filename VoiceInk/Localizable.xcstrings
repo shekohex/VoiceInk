@@ -3107,50 +3107,34 @@
         }
       }
     },
-    "Apple Speech can reserve up to 5 languages. Choose one to remove before downloading the selected language." : {
+    "Apple Speech could not replace a language reservation automatically. Try again." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Speech kann bis zu 5 Sprachen reservieren. Wähle eine zum Entfernen aus, bevor du die neue Sprache herunterlädst."
+            "value" : "Apple Speech konnte eine Sprachreservierung nicht automatisch ersetzen. Versuche es erneut."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Speech 最多可保留 5 种语言。下载所选语言前，请先选取一种移除。"
+            "value" : "Apple Speech 无法自动替换语言预留。请重试。"
           }
         }
       }
     },
-    "Apple Speech can reserve up to 5 languages. Manage reserved languages in Mode settings." : {
+    "Apple Speech could not reserve language assets for %@. Please try again." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Speech kann bis zu 5 Sprachen reservieren. Verwalte reservierte Sprachen in den Moduseinstellungen."
+            "value" : "Apple Speech konnte die Sprachressourcen für %@ nicht reservieren. Versuche es erneut."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apple Speech 最多可保留 5 种语言。请在「模式」设置中管理已保留的语言。"
-          }
-        }
-      }
-    },
-    "Apple Speech could not reserve language assets for %@. Manage reserved Apple Speech languages in settings." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Speech konnte die Sprachressourcen für %@ nicht reservieren. Verwalte reservierte Apple-Speech-Sprachen in den Einstellungen."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Speech 无法为 %@ 预留语言资源。请在设置中管理已预留的 Apple Speech 语言。"
+            "value" : "Apple Speech 无法为 %@ 预留语言资源。请重试。"
           }
         }
       }
@@ -4166,22 +4150,6 @@
         }
       }
     },
-    "Choose a Language to Remove" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sprache zum Entfernen auswählen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选取要移除的语言"
-          }
-        }
-      }
-    },
     "Choose a location to save your settings." : {
       "localizations" : {
         "de" : {
@@ -4978,22 +4946,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法连接到服务器。请检查互联网连接后重试。"
-          }
-        }
-      }
-    },
-    "Could not remove %@ from reserved Apple Speech languages." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ konnte nicht aus den reservierten Apple-Speech-Sprachen entfernt werden."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法将 %@ 从 Apple Speech 保留语言中移除。"
           }
         }
       }
@@ -11186,22 +11138,6 @@
         }
       }
     },
-    "No removable language reservations were found." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine entfernbaren Sprachreservierungen gefunden."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未找到可移除的语言预留。"
-          }
-        }
-      }
-    },
     "No results found" : {
       "localizations" : {
         "de" : {
@@ -13287,22 +13223,6 @@
         }
       }
     },
-    "Remove %@ from reserved Apple Speech languages." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ aus reservierten Apple-Speech-Sprachen entfernen."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将 %@ 从 Apple Speech 保留语言中移除。"
-          }
-        }
-      }
-    },
     "Remove %@ triggers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13390,22 +13310,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除许可证"
-          }
-        }
-      }
-    },
-    "Remove one reserved language to download %@." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine reservierte Sprache entfernen, um %@ herunterzuladen."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除一个已保留的语言以下载 %@。"
           }
         }
       }
