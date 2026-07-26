@@ -285,8 +285,7 @@ struct ModeConfigFormView: View {
                     NativeAppleLanguageAssetControl(
                         localeIdentifier: effectiveLanguage(for: modelInfo),
                         isVisible: true,
-                        startsDownloadAutomatically: true,
-                        allowsReservationReplacement: true
+                        startsDownloadAutomatically: true
                     )
                     .layoutPriority(1)
                     .frame(width: 28, height: 24)
