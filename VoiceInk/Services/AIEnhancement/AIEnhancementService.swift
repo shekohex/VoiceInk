@@ -196,7 +196,7 @@ class AIEnhancementService: ObservableObject {
             return ""
         }
 
-        let formattedText = "\n<USER_MESSAGE>\n\(text)\n</USER_MESSAGE>"
+        let formattedText = "\n<TRANSCRIPT>\n\(text)\n</TRANSCRIPT>"
         let systemMessage = await getSystemMessage(
             prompt: prompt,
             configuration: configuration,
