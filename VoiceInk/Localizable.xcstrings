@@ -9839,6 +9839,22 @@
         }
       }
     },
+    "Manage AI Models" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KI-Modelle verwalten"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理 AI 模型"
+          }
+        }
+      }
+    },
     "Manage custom enhancement models in the Custom tab." : {
       "localizations" : {
         "de" : {
@@ -11781,22 +11797,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开辅助功能设置"
-          }
-        }
-      }
-    },
-    "Manage AI Models" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "KI-Modelle verwalten"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "管理 AI 模型"
           }
         }
       }
