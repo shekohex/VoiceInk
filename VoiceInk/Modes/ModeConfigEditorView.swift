@@ -96,10 +96,10 @@ struct ModeConfigEditorView: View {
         if case .add = mode {
             draft.applyAddModeDefaults(snapshot: snapshot)
             draft.inheritUsableTranscriptionModelSelection(from: snapshot)
-        } else {
-            draft.ensureTranscriptionModelSelection(
-                fallback: snapshot.usableTranscriptionModels.first?.name
-            )
+        } else if let selectedModelName = draft.selectedTranscriptionModelName,
+            !snapshot.hasUsableTranscriptionModel(named: selectedModelName)
+        {
+            draft.selectedTranscriptionModelName = nil
         }
 
         draft.ensurePromptSelection(firstPromptId: snapshot.firstPromptId)
