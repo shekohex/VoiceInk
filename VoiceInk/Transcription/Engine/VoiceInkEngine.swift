@@ -237,6 +237,8 @@ class VoiceInkEngine: NSObject, ObservableObject {
             requestRecordPermission { [self] granted in
                 if granted {
                     Task { @MainActor [self] in
+                        guard await self.passesRecordingPreflight() else { return }
+
                         let startID = UUID()
                         self.activeRecordingStartID = startID
                         let activeModeTask = ActiveWindowService.shared.beginApplyingConfiguration(modeId: modeId) {
@@ -293,7 +295,13 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 )
                             else {
                                 NotificationManager.shared.showNotification(
-                                    title: String(localized: "No AI Model Selected"), type: .error)
+                                    title: self.unavailableModelNotificationTitle(),
+                                    type: .error,
+                                    duration: 7.0,
+                                    actionButton: (
+                                        String(localized: "Manage AI Models"), ModeSetupNavigator.openModelsSettings
+                                    )
+                                )
                                 await self.recorder.stopRecording()
                                 try? FileManager.default.removeItem(at: permanentURL)
                                 self.recordedFile = nil
@@ -399,6 +407,69 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
     private func requestRecordPermission(response: @escaping (Bool) -> Void) {
         response(true)
+    }
+
+    // MARK: - Recording Preflight
+
+    /// Names the model and mode behind a failed resolve, which only happens when the model is gone.
+    @MainActor
+    private func unavailableModelNotificationTitle() -> String {
+        guard let mode = ModeManager.shared.currentEffectiveConfiguration,
+            let modelName = mode.selectedTranscriptionModelName
+        else {
+            return String(localized: "No transcription model available")
+        }
+        let modelDisplayName =
+            transcriptionModelManager.allAvailableModels
+            .first(where: { $0.name == modelName })?
+            .displayName ?? modelName
+
+        return String(
+            format: String(localized: "'%@' is not available for the %@ mode"),
+            modelDisplayName,
+            mode.name
+        )
+    }
+
+    /// Checks mode-independent recording requirements before the microphone opens.
+    @MainActor
+    private func passesRecordingPreflight() async -> Bool {
+        if !ModeManager.shared.hasEnabledConfiguration {
+            await failRecordingPreflight(
+                title: String(localized: "No mode configured"),
+                actionLabel: String(localized: "Set Up Mode"),
+                action: ModeSetupNavigator.openModesSettings
+            )
+            return false
+        }
+
+        if transcriptionModelManager.usableModels.isEmpty {
+            await failRecordingPreflight(
+                title: String(localized: "No transcription model available"),
+                actionLabel: String(localized: "Manage AI Models"),
+                action: ModeSetupNavigator.openModelsSettings
+            )
+            return false
+        }
+
+        return true
+    }
+
+    @MainActor
+    private func failRecordingPreflight(
+        title: String,
+        actionLabel: String,
+        action: @escaping () -> Void
+    ) async {
+        logger.error("❌ Recording preflight failed: \(title, privacy: .public)")
+        recordingState = .idle
+        NotificationManager.shared.showNotification(
+            title: title,
+            type: .error,
+            duration: 7.0,
+            actionButton: (actionLabel, action)
+        )
+        await recorderUIManager?.dismissRecorderPanel()
     }
 
     // MARK: - Recording Context

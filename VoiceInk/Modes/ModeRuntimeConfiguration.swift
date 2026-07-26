@@ -143,13 +143,13 @@ enum ModeRuntimeResolver {
         named modelName: String?,
         transcriptionModelManager: TranscriptionModelManager
     ) -> (any TranscriptionModel)? {
-        if let modelName,
-            let model = transcriptionModelManager.usableModels.first(where: { $0.name == modelName })
-        {
-            return model
+        guard let modelName else {
+            // Legacy modes with no saved model: no configured choice to contradict.
+            return transcriptionModelManager.usableModels.first
         }
 
-        return transcriptionModelManager.usableModels.first
+        // Never substitute a different model for one the mode explicitly names.
+        return transcriptionModelManager.usableModels.first { $0.name == modelName }
     }
 
     private static func resolvedPrompt(
