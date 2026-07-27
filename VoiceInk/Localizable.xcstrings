@@ -12757,6 +12757,22 @@
         }
       }
     },
+    "Re-enhancement failed: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneute Verbesserung fehlgeschlagen: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新润色失败：%@"
+          }
+        }
+      }
+    },
     "Re-enhancement successful" : {
       "localizations" : {
         "de" : {
@@ -16965,6 +16981,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "转写模型"
+          }
+        }
+      }
+    },
+    "Transcription saved, but enhancement failed: %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transkription gespeichert, aber Verbesserung fehlgeschlagen: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转写已保存，但润色失败：%@"
           }
         }
       }
