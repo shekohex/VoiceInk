@@ -3,9 +3,12 @@ import SwiftUI
 
 struct LocalEnhancementProviderManagementView: View {
     @EnvironmentObject private var aiService: AIService
+    @ObservedObject private var voiceInkRefineService = VoiceInkRefineService.shared
 
+    @State private var isVoiceInkRefineExpanded = false
     @State private var isOllamaExpanded = false
     @State private var isLocalCLIExpanded = false
+    @State private var isShowingVoiceInkRefineDeleteConfirmation = false
     @State private var ollamaBaseURL = UserDefaults.standard.string(forKey: "ollamaBaseURL") ?? "http://localhost:11434"
     @State private var selectedOllamaModel = UserDefaults.standard.string(forKey: "ollamaSelectedModel") ?? "mistral"
     @State private var ollamaUserRefreshError: String?
@@ -21,11 +24,26 @@ struct LocalEnhancementProviderManagementView: View {
         VStack(alignment: .leading, spacing: 10) {
             ProviderSectionHeader(
                 title: "Local & CLI Providers",
-                subtitle: "Run enhancement with Ollama on this Mac, or send it to any CLI command."
+                subtitle: "Clean up transcripts on this Mac, connect to Ollama, or use any CLI command."
             )
             .padding(.top, 8)
 
             VStack(spacing: 0) {
+                if voiceInkRefineService.shouldShowInCatalog {
+                    LocalProviderDisclosureRow(
+                        title: Text(VoiceInkRefineService.providerName),
+                        subtitle: Text("On-device transcript cleanup"),
+                        systemImage: "sparkles",
+                        statusTitle: voiceInkRefineStatusTitle,
+                        isExpanded: $isVoiceInkRefineExpanded
+                    ) {
+                        voiceInkRefineConfiguration
+                    }
+
+                    Divider()
+                        .padding(.leading, 58)
+                }
+
                 LocalProviderDisclosureRow(
                     title: Text(verbatim: "Ollama"),
                     subtitle: ollamaModelNames.isEmpty ? Text("Local server") : Text(localModelCountLabel),
@@ -55,6 +73,157 @@ struct LocalEnhancementProviderManagementView: View {
             selectedOllamaModel = aiService.selectedModel(for: .ollama)
             syncLocalCLIStateFromService()
         }
+        .confirmationDialog(
+            "Delete VoiceInk Refine?",
+            isPresented: $isShowingVoiceInkRefineDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Model", role: .destructive) {
+                Task {
+                    await voiceInkRefineService.deleteModel()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The model will need to be downloaded again before a Mode can use it.")
+        }
+    }
+
+    private var voiceInkRefineStatusTitle: Text {
+        switch voiceInkRefineService.availability {
+        case .unsupportedIntel:
+            return Text("Unavailable")
+        case .insufficientMemory:
+            return Text("Unavailable")
+        case .available:
+            if voiceInkRefineService.isDownloading {
+                return Text("Downloading")
+            }
+            return voiceInkRefineService.isDownloaded ? Text("Ready") : Text("Not downloaded")
+        }
+    }
+
+    @ViewBuilder
+    private var voiceInkRefineConfiguration: some View {
+        LocalProviderExpandedContent {
+            if let unavailableDescription = voiceInkRefineService.unavailableDescription {
+                Text(unavailableDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                LocalProviderFormRow(title: "Model") {
+                    Text(VoiceInkRefineService.modelName)
+                        .font(.system(size: 12, weight: .medium))
+                }
+
+                Divider()
+                    .padding(.leading, LocalProviderMetrics.labelWidth + 12)
+
+                LocalProviderFormRow(title: "Download") {
+                    Text(VoiceInkRefineService.downloadSizeDescription)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
+                if voiceInkRefineService.isDownloading {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 10) {
+                            ProgressView(value: voiceInkRefineService.downloadProgress)
+                                .frame(maxWidth: 280)
+                                .accessibilityLabel("Model download progress")
+                                .accessibilityValue(
+                                    Text(verbatim: voiceInkRefineDownloadAccessibilityValue)
+                                )
+
+                            Text(
+                                voiceInkRefineService.downloadProgress,
+                                format: .percent.precision(.fractionLength(0))
+                            )
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 38, alignment: .trailing)
+
+                            Button("Cancel") {
+                                voiceInkRefineService.cancelDownload()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+
+                        Text(verbatim: voiceInkRefineDownloadDetail)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                } else if voiceInkRefineService.isDownloaded {
+                    HStack(spacing: 10) {
+                        Button("Delete Model", role: .destructive) {
+                            isShowingVoiceInkRefineDeleteConfirmation = true
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Text("Select VoiceInk Refine as the AI provider in a Mode to use it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Button("Download Model") {
+                        voiceInkRefineService.startDownload()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                if let downloadError = voiceInkRefineService.downloadError {
+                    Text(downloadError)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.Status.error)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var voiceInkRefineDownloadDetail: String {
+        if voiceInkRefineService.isFinalizingDownload {
+            return String(localized: "Finalizing model files…")
+        }
+
+        let downloaded = ByteCountFormatter.string(
+            fromByteCount: voiceInkRefineService.downloadedBytes,
+            countStyle: .file
+        )
+        let total = ByteCountFormatter.string(
+            fromByteCount: voiceInkRefineService.totalDownloadBytes,
+            countStyle: .file
+        )
+
+        if voiceInkRefineService.downloadBytesPerSecond >= 1 {
+            let speed = ByteCountFormatter.string(
+                fromByteCount: Int64(voiceInkRefineService.downloadBytesPerSecond),
+                countStyle: .file
+            )
+            return String(
+                format: String(localized: "%@ of %@ • %@/s"),
+                downloaded,
+                total,
+                speed
+            )
+        }
+
+        return String(
+            format: String(localized: "%@ of %@"),
+            downloaded,
+            total
+        )
+    }
+
+    private var voiceInkRefineDownloadAccessibilityValue: String {
+        let percentage = Int((voiceInkRefineService.downloadProgress * 100).rounded())
+        return "\(percentage)%. \(voiceInkRefineDownloadDetail)"
     }
 
     private var ollamaModelNames: [String] {

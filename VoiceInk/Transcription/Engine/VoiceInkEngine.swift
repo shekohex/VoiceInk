@@ -287,6 +287,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 return
                             }
 
+                            self.prepareVoiceInkRefineIfNeeded()
                             self.startRecordingContextCapture()
 
                             let modelResolution = ModeRuntimeResolver.transcriptionModelResolution(
@@ -753,6 +754,24 @@ class VoiceInkEngine: NSObject, ObservableObject {
         return (mode.name, mode.icon.value)
     }
 
+    private func prepareVoiceInkRefineIfNeeded() {
+        guard let enhancementService,
+            let aiService = enhancementService.getAIService()
+        else {
+            return
+        }
+
+        let configuration = ModeRuntimeResolver.currentEnhancementConfiguration(
+            enhancementService: enhancementService,
+            aiService: aiService
+        )
+        guard configuration.isEnabled, configuration.provider == .voiceInkRefine else {
+            return
+        }
+
+        aiService.voiceInkRefineService.prepareForRecording()
+    }
+
     // MARK: - Resource Cleanup
 
     private func cancelPipelineSession(transcriptionID: UUID, session: TranscriptionSession?) {
@@ -775,6 +794,10 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
     private func finishRecorderSession() async {
         enhancementService?.clearCapturedContexts()
+        await enhancementService?
+            .getAIService()?
+            .voiceInkRefineService
+            .unloadFromMemory()
     }
 
     func cleanupResources() async {

@@ -73,8 +73,13 @@ class AIEnhancementService: ObservableObject {
     }
 
     func isConfigured(for configuration: EnhancementRuntimeConfiguration) -> Bool {
-        guard configuration.prompt != nil else { return false }
         guard let provider = configuration.provider else { return false }
+
+        if provider == .voiceInkRefine {
+            return aiService.voiceInkRefineService.isAvailableInModes
+        }
+
+        guard configuration.prompt != nil else { return false }
 
         if provider == .localCLI || provider == .ollama {
             return true
@@ -183,19 +188,33 @@ class AIEnhancementService: ObservableObject {
             throw EnhancementError.notConfigured
         }
 
-        guard let prompt = configuration.prompt else {
-            throw EnhancementError.notConfigured
-        }
-
         guard let provider = configuration.provider else {
             throw EnhancementError.notConfigured
         }
-        let modelName = configuration.modelName ?? provider.defaultModel
 
         guard !text.isEmpty else {
             return ""
         }
 
+        if provider == .voiceInkRefine {
+            lastSystemMessageSent = nil
+            lastUserMessageSent = text
+
+            do {
+                let result = try await aiService.enhanceWithVoiceInkRefine(transcript: text)
+                return AIEnhancementOutputFilter.filter(
+                    result.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+            } catch {
+                throw EnhancementError.customError(error.localizedDescription)
+            }
+        }
+
+        guard let prompt = configuration.prompt else {
+            throw EnhancementError.notConfigured
+        }
+
+        let modelName = configuration.modelName ?? provider.defaultModel
         let formattedText = "\n<TRANSCRIPT>\n\(text)\n</TRANSCRIPT>"
         let systemMessage = await getSystemMessage(
             prompt: prompt,
@@ -519,6 +538,30 @@ class AIEnhancementService: ObservableObject {
         var didUpdateModes = false
 
         for index in updatedConfigurations.indices {
+            if updatedConfigurations[index].selectedAIProvider == AIProvider.voiceInkRefine.rawValue {
+                if updatedConfigurations[index].selectedPrompt != nil {
+                    updatedConfigurations[index].selectedPrompt = nil
+                    didUpdateModes = true
+                }
+                if updatedConfigurations[index].selectedAIModel != VoiceInkRefineService.modelName {
+                    updatedConfigurations[index].selectedAIModel = VoiceInkRefineService.modelName
+                    didUpdateModes = true
+                }
+                if updatedConfigurations[index].useClipboardContext {
+                    updatedConfigurations[index].useClipboardContext = false
+                    didUpdateModes = true
+                }
+                if updatedConfigurations[index].useSelectedTextContext {
+                    updatedConfigurations[index].useSelectedTextContext = false
+                    didUpdateModes = true
+                }
+                if updatedConfigurations[index].useScreenCapture {
+                    updatedConfigurations[index].useScreenCapture = false
+                    didUpdateModes = true
+                }
+                continue
+            }
+
             let selectedPrompt = updatedConfigurations[index].selectedPrompt
             let hasInvalidPrompt = selectedPrompt.map { !availablePromptIds.contains($0) } ?? false
             let hasMissingPrompt = selectedPrompt == nil
