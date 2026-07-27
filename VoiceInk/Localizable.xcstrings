@@ -14913,6 +14913,7 @@
       }
     },
     "Skip" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15037,6 +15038,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳过简短转写"
+          }
+        }
+      }
+    },
+    "Skip This Step" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diesen Schritt überspringen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过此步骤"
           }
         }
       }
