@@ -95,14 +95,13 @@ struct OnboardingBottomBar: View {
     var body: some View {
         switch placement {
         case .split:
-            ZStack {
-                HStack(spacing: 0) {
-                    leadingSlot
-                    Spacer(minLength: 0)
-                    primaryButton
-                }
-
+            HStack(spacing: 0) {
+                leadingSlot
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 skipButton
+                    .frame(maxWidth: .infinity, alignment: .center)
+                primaryButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         case .centered:
             HStack(spacing: 0) {
@@ -140,6 +139,9 @@ struct OnboardingBottomBar: View {
                     .foregroundColor(AppTheme.Text.secondary)
                     .padding(.horizontal, 4)
                     .frame(height: 20)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .allowsTightening(true)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
