@@ -13,6 +13,7 @@ DMG_ASSET_DIR="$REPO_ROOT/release/dmg"
 DMG_LAYOUT="$DMG_ASSET_DIR/layout.conf"
 DMG_BACKGROUND="$DMG_ASSET_DIR/background.tiff"
 DMG_VOLUME_ICON="$DMG_ASSET_DIR/volume-icon.icns"
+WHISPER_FRAMEWORK="${VOICEINK_WHISPER_FRAMEWORK:-$HOME/VoiceInk-Dependencies/whisper.cpp/build-apple/whisper.xcframework}"
 
 DEVELOPER_IDENTITY="${VOICEINK_DEVELOPER_IDENTITY:-Developer ID Application: Prakash Joshi (V6J6A3VWY2)}"
 NOTARY_PROFILE="${VOICEINK_NOTARY_PROFILE:-VoiceInk-Notarization}"
@@ -20,6 +21,7 @@ SPARKLE_ACCOUNT="${VOICEINK_SPARKLE_ACCOUNT:-VoiceInk}"
 RELEASE_BASE_URL="${VOICEINK_RELEASE_BASE_URL:-https://github.com/Beingpax/VoiceInk/releases/download}"
 EXPECTED_FEED_URL="https://beingpax.github.io/VoiceInk/appcast.xml"
 EXPECTED_BUNDLE_ID="com.prakashjoshipax.VoiceInk"
+EXPECTED_MINIMUM_SYSTEM_VERSION="14.4"
 
 XCODE_DEVELOPER_DIR="${VOICEINK_XCODE_DEVELOPER_DIR:-${DEVELOPER_DIR:-}}"
 if [[ -z "$XCODE_DEVELOPER_DIR" && -d "/Applications/Xcode.app/Contents/Developer" ]]; then
@@ -168,6 +170,9 @@ done
 if [[ -n "$INPUT_APP" && -n "$INPUT_ARCHIVE" ]]; then
     fail "--app and --archive cannot be used together"
 fi
+if [[ -z "$INPUT_APP" && -z "$INPUT_ARCHIVE" && ! -d "$WHISPER_FRAMEWORK" ]]; then
+    fail "Whisper framework not found: $WHISPER_FRAMEWORK. Run: make whisper"
+fi
 [[ -f "$EXPORT_OPTIONS" ]] || fail "Export options not found: $EXPORT_OPTIONS"
 [[ -f "$DMG_LAYOUT" ]] || fail "DMG layout not found: $DMG_LAYOUT"
 [[ -f "$DMG_BACKGROUND" ]] || fail "DMG background not found: $DMG_BACKGROUND"
@@ -292,6 +297,8 @@ esac
 
 [[ "$BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" ]] || fail "Unexpected bundle identifier: $BUNDLE_ID"
 [[ "$FEED_URL" == "$EXPECTED_FEED_URL" ]] || fail "Unexpected Sparkle feed URL: $FEED_URL"
+[[ "$MINIMUM_SYSTEM_VERSION" == "$EXPECTED_MINIMUM_SYSTEM_VERSION" ]] \
+    || fail "Unexpected minimum system version: $MINIMUM_SYSTEM_VERSION (expected $EXPECTED_MINIMUM_SYSTEM_VERSION)"
 [[ "$BUILD_VERSION" =~ ^[0-9]+$ ]] || fail "CFBundleVersion must be numeric: $BUILD_VERSION"
 
 log "Verifying application signature and Sparkle key"

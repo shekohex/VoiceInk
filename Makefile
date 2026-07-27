@@ -94,7 +94,7 @@ run:
 	fi
 
 # Build a signed, notarized DMG and matching local Sparkle Appcast.
-release:
+release: whisper
 	@if [ -n "$(NOTES)" ]; then \
 		./scripts/release.sh --notes "$(NOTES)" $(RELEASE_ARGS); \
 	else \

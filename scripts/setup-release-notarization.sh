@@ -6,7 +6,7 @@ PROFILE_NAME="${VOICEINK_NOTARY_PROFILE:-VoiceInk-Notarization}"
 TEAM_ID="V6J6A3VWY2"
 
 printf 'Apple Developer Apple ID: '
-read -r APPLE_ID
+read -r APPLE_ID || true
 
 if [[ -z "$APPLE_ID" ]]; then
     printf 'error: Apple ID is required\n' >&2
