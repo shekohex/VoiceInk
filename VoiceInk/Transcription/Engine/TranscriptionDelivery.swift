@@ -23,12 +23,19 @@ final class TranscriptionDelivery {
     }
 
     func deliver(_ request: Request, actions: Actions) async {
+        RecordingPerformanceDiagnostics.shared.mark(
+            "delivery.entered",
+            details:
+                "status=\(request.transcription.transcriptionStatus) output=\(String(describing: request.output.outputMode)) chars=\(request.text?.count ?? 0)"
+        )
         guard request.transcription.transcriptionStatus == TranscriptionStatus.completed.rawValue else {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.dismiss_failed")
             await actions.dismiss()
             return
         }
 
         if request.isAssistantFollowUp {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.follow_up")
             await deliverFollowUp(request, actions: actions)
             return
         }
@@ -36,18 +43,22 @@ final class TranscriptionDelivery {
         if request.output.outputMode == .respond,
             request.responseConfig != nil || request.responseError != nil
         {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.response")
             await deliverResponse(request, actions: actions)
             return
         }
 
         if request.output.outputMode == .customCommand {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.custom_command")
             await deliverCustomCommand(request, actions: actions)
             return
         }
 
         if let text = request.text {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.paste")
             await paste(text, output: request.output, actions: actions)
         } else {
+            RecordingPerformanceDiagnostics.shared.mark("delivery.route.dismiss_empty")
             await actions.dismiss()
         }
     }
@@ -155,21 +166,36 @@ final class TranscriptionDelivery {
     }
 
     private func paste(_ text: String, output: OutputRuntimeConfiguration, actions: Actions) async {
+        RecordingPerformanceDiagnostics.shared.mark("delivery.paste.prepare.begin")
         let textToPaste = deliverableText(from: text)
         let appendSpace = UserDefaults.standard.bool(forKey: "AppendTrailingSpace")
         let pastedText = textToPaste + (appendSpace ? " " : "")
+        RecordingPerformanceDiagnostics.shared.mark(
+            "delivery.paste.prepare.end",
+            details: "chars=\(pastedText.count) append_space=\(appendSpace)"
+        )
         SoundManager.shared.playStopSound()
+        RecordingPerformanceDiagnostics.shared.mark("delivery.paste.dismiss.begin")
         await actions.dismiss()
+        RecordingPerformanceDiagnostics.shared.mark("delivery.paste.dismiss.end")
 
+        RecordingPerformanceDiagnostics.shared.mark("delivery.paste.task.start")
         let pasteTask = CursorPaster.startPasteAtCursor(pastedText)
 
         let autoSendKey = output.outputMode == .paste ? output.autoSendKey : .none
         Task { @MainActor in
-            _ = await pasteTask.value
+            let result = await pasteTask.value
+            RecordingPerformanceDiagnostics.shared.mark(
+                "delivery.paste.task.completed",
+                details: "command_posted=\(result.didPostPasteCommand)"
+            )
 
             if autoSendKey.isEnabled {
+                RecordingPerformanceDiagnostics.shared.mark("delivery.auto_send.delay.begin")
                 try? await Task.sleep(nanoseconds: 500_000_000)
+                RecordingPerformanceDiagnostics.shared.mark("delivery.auto_send.post.begin")
                 CursorPaster.performAutoSend(autoSendKey)
+                RecordingPerformanceDiagnostics.shared.mark("delivery.auto_send.post.end")
             }
         }
     }

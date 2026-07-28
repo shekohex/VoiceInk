@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Beingpax/SelectedTextKit.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "9c51732dd6b6c1dad161762ec3bb8bb73bc82833"
+        "branch" : "performance/off-main-menu-action",
+        "revision" : "05a3e5177300d800c2785be83ba2ba7fa775e41a"
       }
     },
     {

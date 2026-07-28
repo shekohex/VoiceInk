@@ -56,7 +56,7 @@ struct MiniRecorderView<S: RecorderStateProvider & ObservableObject>: View {
 
             RecorderStatusDisplay(
                 currentState: stateProvider.recordingState,
-                audioMeter: recorder.audioMeter
+                audioMeterProvider: recorder.audioMeterSnapshot
             )
 
             Spacer(minLength: 0)
@@ -103,5 +103,11 @@ struct MiniRecorderView<S: RecorderStateProvider & ObservableObject>: View {
         .animation(.easeInOut(duration: 0.3), value: hasLiveTranscript)
         .animation(.easeInOut(duration: 0.3), value: hasAssistantResponse)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .onChange(of: stateProvider.recordingState) { _, newState in
+            RecordingPerformanceDiagnostics.shared.mark(
+                "ui.state_observed",
+                details: "view=mini state=\(String(describing: newState))"
+            )
+        }
     }
 }

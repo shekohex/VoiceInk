@@ -754,7 +754,7 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Beingpax/SelectedTextKit.git";
 			requirement = {
-				branch = main;
+				branch = performance/off-main-menu-action;
 				kind = branch;
 			};
 		};

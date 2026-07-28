@@ -78,9 +78,15 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
     private func showRecorderPanel() {
         guard let engine = engine, let recorder = recorder else { return }
 
+        RecordingPerformanceDiagnostics.shared.mark(
+            "ui.panel_show.begin",
+            details: "style=\(recorderPanelStyle.rawValue)"
+        )
         switch recorderPanelStyle {
         case .notch:
+            let reusedWindow = notchWindowManager != nil
             if notchWindowManager == nil {
+                RecordingPerformanceDiagnostics.shared.mark("ui.notch_manager.create.begin")
                 notchWindowManager = NotchWindowManager(
                     engine: engine,
                     recorder: recorder,
@@ -101,10 +107,17 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
                         }
                     }
                 )
+                RecordingPerformanceDiagnostics.shared.mark("ui.notch_manager.create.end")
             }
             notchWindowManager?.show()
+            RecordingPerformanceDiagnostics.shared.mark(
+                "ui.panel_show.end",
+                details: "style=notch reused=\(reusedWindow)"
+            )
         case .mini:
+            let reusedWindow = miniWindowManager != nil
             if miniWindowManager == nil {
+                RecordingPerformanceDiagnostics.shared.mark("ui.mini_manager.create.begin")
                 miniWindowManager = MiniWindowManager(
                     engine: engine,
                     recorder: recorder,
@@ -125,18 +138,31 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
                         }
                     }
                 )
+                RecordingPerformanceDiagnostics.shared.mark("ui.mini_manager.create.end")
             }
             miniWindowManager?.show()
+            RecordingPerformanceDiagnostics.shared.mark(
+                "ui.panel_show.end",
+                details: "style=mini reused=\(reusedWindow)"
+            )
         }
     }
 
     private func hideRecorderPanel() {
+        RecordingPerformanceDiagnostics.shared.mark(
+            "ui.panel_hide.begin",
+            details: "style=\(recorderPanelStyle.rawValue)"
+        )
         switch recorderPanelStyle {
         case .notch:
             notchWindowManager?.hide()
         case .mini:
             miniWindowManager?.hide()
         }
+        RecordingPerformanceDiagnostics.shared.mark(
+            "ui.panel_hide.end",
+            details: "style=\(recorderPanelStyle.rawValue)"
+        )
     }
 
     private func rebuildVisiblePanel(previousStyle: RecorderPanelStyle) {
@@ -170,6 +196,10 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
                 await cancelRecording()
             case .idle:
                 if engine.assistantSession.canSendFollowUp {
+                    RecordingPerformanceDiagnostics.shared.begin(
+                        trigger: "assistantFollowUp",
+                        panelStyle: recorderPanelStyle.rawValue
+                    )
                     SoundManager.shared.playStartSound()
                     await engine.toggleRecord(
                         modeId: modeId,
@@ -182,8 +212,13 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
                 await dismissRecorderPanel()
             }
         } else {
+            RecordingPerformanceDiagnostics.shared.begin(
+                trigger: "toggleRecorderPanel",
+                panelStyle: recorderPanelStyle.rawValue
+            )
             SoundManager.shared.playStartSound()
             isRecorderPanelVisible = true
+            RecordingPerformanceDiagnostics.shared.mark("ui.panel_visible")
             await engine.toggleRecord(modeId: modeId)
         }
     }
@@ -191,9 +226,11 @@ class RecorderUIManager: ObservableObject, RecorderPanelPresenting {
     func dismissRecorderPanel() async {
         guard let engine = engine else { return }
 
+        RecordingPerformanceDiagnostics.shared.mark("ui.dismiss.begin")
         hideRecorderPanel()
         isRecorderPanelVisible = false
         engine.assistantSession.reset()
+        RecordingPerformanceDiagnostics.shared.mark("ui.dismiss.end")
     }
 
     func resetOnLaunch() async {

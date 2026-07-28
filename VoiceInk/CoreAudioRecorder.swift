@@ -172,16 +172,29 @@ final class CoreAudioRecorder: @unchecked Sendable {
         // Stop any existing recording
         stopRecording()
 
+        let wasPrewarmed = isPrepared(for: deviceID)
+        RecordingPerformanceDiagnostics.shared.mark(
+            "audio.prepare.begin",
+            details: "prewarmed=\(wasPrewarmed)"
+        )
         try prepare(deviceID: deviceID)
+        RecordingPerformanceDiagnostics.shared.mark(
+            "audio.prepare.end",
+            details: "prewarmed=\(wasPrewarmed)"
+        )
 
         do {
             recordingURL = url
 
             // The output file is per recording; the AUHAL setup above is reused.
+            RecordingPerformanceDiagnostics.shared.mark("audio.output_file.begin")
             try createOutputFile(at: url)
+            RecordingPerformanceDiagnostics.shared.mark("audio.output_file.end")
             resetAudioProcessingState()
 
+            RecordingPerformanceDiagnostics.shared.mark("audio.unit_start.begin")
             try startAudioUnit()
+            RecordingPerformanceDiagnostics.shared.mark("audio.unit_start.end")
         } catch {
             isRecording = false
             recordingActive.store(false, ordering: .releasing)
@@ -195,34 +208,53 @@ final class CoreAudioRecorder: @unchecked Sendable {
     /// Stops the current recording
     func stopRecording() {
         guard isRecording || audioFile != nil else {
+            RecordingPerformanceDiagnostics.shared.mark("audio.stop.skipped")
             return
         }
 
+        RecordingPerformanceDiagnostics.shared.mark("audio.stop.begin")
         let wasRecording = isRecording
         isRecording = false
         recordingActive.store(false, ordering: .releasing)
 
         if wasRecording, let unit = audioUnit {
+            RecordingPerformanceDiagnostics.shared.mark("audio.unit_stop.begin")
             let stopStatus = AudioOutputUnitStop(unit)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "audio.unit_stop.end",
+                details: "status=\(stopStatus)"
+            )
             if stopStatus != noErr {
                 logger.warning("🎙️ AudioOutputUnitStop returned \(stopStatus, privacy: .public)")
             }
 
+            RecordingPerformanceDiagnostics.shared.mark("audio.render_callbacks_drain.begin")
             waitForRenderCallbacksToFinish()
+            RecordingPerformanceDiagnostics.shared.mark("audio.render_callbacks_drain.end")
 
+            RecordingPerformanceDiagnostics.shared.mark("audio.unit_reset.begin")
             let resetStatus = AudioUnitReset(unit, kAudioUnitScope_Global, 0)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "audio.unit_reset.end",
+                details: "status=\(resetStatus)"
+            )
             if resetStatus != noErr {
                 logger.warning("🎙️ AudioUnitReset returned \(resetStatus, privacy: .public)")
             }
         }
 
+        RecordingPerformanceDiagnostics.shared.mark("audio.processing_queue_drain.begin")
         drainAudioProcessingQueue()
+        RecordingPerformanceDiagnostics.shared.mark("audio.processing_queue_drain.end")
         logDroppedInputBufferCounters(context: "stop")
 
+        RecordingPerformanceDiagnostics.shared.mark("audio.output_file_close.begin")
         closeOutputFile()
+        RecordingPerformanceDiagnostics.shared.mark("audio.output_file_close.end")
         recordingURL = nil
 
         resetMeters()
+        RecordingPerformanceDiagnostics.shared.mark("audio.stop.end")
     }
 
     /// Releases the prepared AUHAL and buffers. Use for app shutdown or hard recovery.

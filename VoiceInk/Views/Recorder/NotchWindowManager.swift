@@ -31,12 +31,20 @@ class NotchWindowManager {
     }
 
     func show() {
-        if panel == nil { initializeWindow() }
+        if panel == nil {
+            RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.initialize.begin")
+            initializeWindow()
+            RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.initialize.end")
+        }
+        RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.order_front.begin")
         panel?.show()
+        RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.order_front.end")
     }
 
     func hide() {
+        RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.order_out.begin")
         panel?.orderOut(nil)
+        RecordingPerformanceDiagnostics.shared.mark("ui.notch_window.order_out.end")
     }
 
     func destroyWindow() {

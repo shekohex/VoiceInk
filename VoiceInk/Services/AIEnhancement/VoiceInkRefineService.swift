@@ -46,14 +46,26 @@ private actor VoiceInkRefineInferenceEngine {
     func prepare(modelDirectory: URL) async throws {
         #if arch(arm64)
             if isWarmed {
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.prepare.reused",
+                    details: mlxMemoryDetails()
+                )
                 return
             }
 
             if let preparationTask {
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.prepare.join_existing",
+                    details: mlxMemoryDetails()
+                )
                 try await preparationTask.value
                 return
             }
 
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.prepare.begin",
+                details: mlxMemoryDetails()
+            )
             let task = Task {
                 try await prepareModel(modelDirectory: modelDirectory)
             }
@@ -62,8 +74,16 @@ private actor VoiceInkRefineInferenceEngine {
             do {
                 try await task.value
                 preparationTask = nil
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.prepare.end",
+                    details: mlxMemoryDetails()
+                )
             } catch {
                 preparationTask = nil
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.prepare.failed",
+                    details: "\(mlxMemoryDetails()) error=\(error.localizedDescription)"
+                )
                 throw error
             }
         #else
@@ -73,6 +93,10 @@ private actor VoiceInkRefineInferenceEngine {
 
     func enhance(transcript: String, modelDirectory: URL) async throws -> String {
         #if arch(arm64)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.enhance.begin",
+                details: "\(mlxMemoryDetails()) words=\(transcript.split(whereSeparator: \.isWhitespace).count)"
+            )
             try await prepare(modelDirectory: modelDirectory)
 
             guard let modelContainer, let systemPrefixCache else {
@@ -111,6 +135,14 @@ private actor VoiceInkRefineInferenceEngine {
                     "Enhancement completed total=\(totalDuration, format: .fixed(precision: 3), privacy: .public)s promptTokens=\(completionInfo.promptTokenCount, privacy: .public) prompt=\(completionInfo.promptTime, format: .fixed(precision: 3), privacy: .public)s generatedTokens=\(completionInfo.generationTokenCount, privacy: .public) generation=\(completionInfo.generateTime, format: .fixed(precision: 3), privacy: .public)s generationRate=\(completionInfo.tokensPerSecond, format: .fixed(precision: 1), privacy: .public)t/s"
                 )
             }
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.enhance.end",
+                details: String(
+                    format: "%@ duration_ms=%.2f",
+                    mlxMemoryDetails(),
+                    totalDuration * 1_000
+                )
+            )
 
             return output
         #else
@@ -120,6 +152,10 @@ private actor VoiceInkRefineInferenceEngine {
 
     func unload() async {
         #if arch(arm64)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.unload.begin",
+                details: mlxMemoryDetails()
+            )
             let activePreparationTask = preparationTask
             let hadActivePreparation = activePreparationTask != nil
             activePreparationTask?.cancel()
@@ -138,11 +174,28 @@ private actor VoiceInkRefineInferenceEngine {
                 Memory.clearCache()
                 logger.info("Model unloaded from memory")
             }
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.unload.end",
+                details: mlxMemoryDetails()
+            )
+        #endif
+    }
+
+    func unloadIfNeeded() async {
+        #if arch(arm64)
+            guard preparationTask != nil || modelContainer != nil || systemPrefixCache != nil || isWarmed else {
+                return
+            }
+            await unload()
         #endif
     }
 
     #if arch(arm64)
         private func prepareModel(modelDirectory: URL) async throws {
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.model_prepare.begin",
+                details: mlxMemoryDetails()
+            )
             let container = try await loadContainerIfNeeded(from: modelDirectory)
             let prefixCache = try await buildSystemPrefixCacheIfNeeded(using: container)
 
@@ -151,6 +204,10 @@ private actor VoiceInkRefineInferenceEngine {
             }
 
             let startedAt = Date()
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.warmup.begin",
+                details: mlxMemoryDetails()
+            )
             let warmupSession = ChatSession(
                 container,
                 cache: copy(cache: prefixCache),
@@ -163,6 +220,14 @@ private actor VoiceInkRefineInferenceEngine {
             try Task.checkCancellation()
 
             isWarmed = true
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.warmup.end",
+                details: String(
+                    format: "%@ duration_ms=%.2f",
+                    mlxMemoryDetails(),
+                    Date().timeIntervalSince(startedAt) * 1_000
+                )
+            )
             logger.info(
                 "Model warm-up completed in \(Date().timeIntervalSince(startedAt), format: .fixed(precision: 3), privacy: .public)s"
             )
@@ -172,10 +237,18 @@ private actor VoiceInkRefineInferenceEngine {
             -> MLXLMCommon.ModelContainer
         {
             if let modelContainer {
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.model_load.reused",
+                    details: mlxMemoryDetails()
+                )
                 return modelContainer
             }
 
             let startedAt = Date()
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.model_load.begin",
+                details: mlxMemoryDetails()
+            )
             let loadedContainer = try await loadModelContainer(
                 from: modelDirectory,
                 using: #huggingFaceTokenizerLoader()
@@ -183,6 +256,14 @@ private actor VoiceInkRefineInferenceEngine {
             try Task.checkCancellation()
 
             modelContainer = loadedContainer
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.model_load.end",
+                details: String(
+                    format: "%@ duration_ms=%.2f",
+                    mlxMemoryDetails(),
+                    Date().timeIntervalSince(startedAt) * 1_000
+                )
+            )
             logger.info(
                 "Model loaded in \(Date().timeIntervalSince(startedAt), format: .fixed(precision: 3), privacy: .public)s"
             )
@@ -193,10 +274,18 @@ private actor VoiceInkRefineInferenceEngine {
             using container: MLXLMCommon.ModelContainer
         ) async throws -> [KVCache] {
             if let systemPrefixCache {
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.prefix_cache.reused",
+                    details: mlxMemoryDetails()
+                )
                 return systemPrefixCache
             }
 
             let startedAt = Date()
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.prefix_cache.begin",
+                details: mlxMemoryDetails()
+            )
             let cacheBuilder = ChatSession(
                 container,
                 // This model has no chat template. Its normal two-message prompt is
@@ -224,6 +313,14 @@ private actor VoiceInkRefineInferenceEngine {
             try Task.checkCancellation()
 
             systemPrefixCache = loadedCache
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.prefix_cache.end",
+                details: String(
+                    format: "%@ duration_ms=%.2f",
+                    mlxMemoryDetails(),
+                    Date().timeIntervalSince(startedAt) * 1_000
+                )
+            )
             logger.info(
                 "System prompt prefix prefilled in \(Date().timeIntervalSince(startedAt), format: .fixed(precision: 3), privacy: .public)s"
             )
@@ -232,6 +329,16 @@ private actor VoiceInkRefineInferenceEngine {
 
         private func copy(cache: [KVCache]) -> [KVCache] {
             cache.map { $0.copy() }
+        }
+
+        private func mlxMemoryDetails() -> String {
+            let snapshot = Memory.snapshot()
+            return String(
+                format: "mlx_active_mb=%.1f mlx_cache_mb=%.1f mlx_peak_mb=%.1f",
+                Double(snapshot.activeMemory) / 1_048_576,
+                Double(snapshot.cacheMemory) / 1_048_576,
+                Double(snapshot.peakMemory) / 1_048_576
+            )
         }
     #endif
 }
@@ -369,23 +476,39 @@ final class VoiceInkRefineService: ObservableObject {
         }
     }
 
-    func unloadFromMemory() async {
-        await inferenceEngine.unload()
+    func unloadPreparedModelIfNeeded() async {
+        await inferenceEngine.unloadIfNeeded()
     }
 
     func prepareForRecording() {
         guard availability == .available, isDownloaded, let snapshotURL else {
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.background_prepare.skipped",
+                details:
+                    "availability=\(String(describing: availability)) downloaded=\(isDownloaded)"
+            )
             return
         }
 
         let inferenceEngine = inferenceEngine
         let logger = logger
+        RecordingPerformanceDiagnostics.shared.mark("refine.background_prepare.scheduled")
         Task.detached(priority: .utility) {
+            RecordingPerformanceDiagnostics.shared.mark(
+                "refine.background_prepare.started",
+                details: "priority=utility"
+            )
             do {
                 try await inferenceEngine.prepare(modelDirectory: snapshotURL)
+                RecordingPerformanceDiagnostics.shared.mark("refine.background_prepare.completed")
             } catch is CancellationError {
+                RecordingPerformanceDiagnostics.shared.mark("refine.background_prepare.cancelled")
                 logger.debug("Background model preparation was cancelled")
             } catch {
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "refine.background_prepare.failed",
+                    details: "error=\(error.localizedDescription)"
+                )
                 logger.error(
                     "Background model preparation failed: \(error.localizedDescription, privacy: .public)"
                 )

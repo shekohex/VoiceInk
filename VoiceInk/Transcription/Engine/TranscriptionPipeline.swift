@@ -65,6 +65,10 @@ class TranscriptionPipeline {
         assistant: AssistantHooks = .inactive
     ) async {
         let model = transcriptionConfiguration.model
+        RecordingPerformanceDiagnostics.shared.mark(
+            "pipeline.entered",
+            details: "model=\(model.displayName) streaming=\(session != nil)"
+        )
         var finalText: String?
         var didInsertSessionMetric = false
         var responseError: String?
@@ -72,6 +76,7 @@ class TranscriptionPipeline {
         var responseConfig: EnhancementRuntimeConfiguration?
 
         func finishCanceledTranscription() async {
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.cancel.begin")
             await onCancel()
 
             let canceledDuration: TimeInterval?
@@ -92,6 +97,7 @@ class TranscriptionPipeline {
             } catch {
                 logger.error("Failed to save canceled transcription: \(error, privacy: .public)")
             }
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.cancel.end")
         }
 
         if shouldCancel() {
@@ -102,6 +108,10 @@ class TranscriptionPipeline {
         do {
             let transcriptionStart = Date()
             var text: String
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.transcription.begin",
+                details: "streaming=\(session != nil)"
+            )
             if let session {
                 text = try await session.transcribe(audioURL: audioURL)
             } else {
@@ -111,7 +121,16 @@ class TranscriptionPipeline {
                     context: transcriptionConfiguration.requestContext
                 )
             }
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.transcription.end",
+                details: "chars=\(text.count)"
+            )
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.output_filter.begin")
             text = TranscriptionOutputFilter.filter(text)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.output_filter.end",
+                details: "chars=\(text.count)"
+            )
             let transcriptionDuration = Date().timeIntervalSince(transcriptionStart)
 
             if shouldCancel() {
@@ -125,8 +144,13 @@ class TranscriptionPipeline {
                 let processedText = triggerWordModeSelection(text)
             {
                 text = processedText
+                RecordingPerformanceDiagnostics.shared.mark(
+                    "pipeline.trigger_mode.applied",
+                    details: "chars=\(text.count)"
+                )
             }
 
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.configuration.resolve.begin")
             let formattingConfiguration = resolveFormattingConfiguration()
             let resolvedEnhancementConfiguration = enhancementConfiguration()
             let resolvedOutputConfiguration = outputConfiguration()
@@ -134,16 +158,32 @@ class TranscriptionPipeline {
                 for: formattingConfiguration.mode ?? resolvedEnhancementConfiguration?.mode
                     ?? resolvedOutputConfiguration.mode ?? transcriptionConfiguration.mode
             )
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.configuration.resolve.end",
+                details:
+                    "formatting=\(formattingConfiguration.isTextFormattingEnabled) enhancement=\(resolvedEnhancementConfiguration?.isEnabled == true) output=\(String(describing: resolvedOutputConfiguration.outputMode))"
+            )
 
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.formatting.begin")
             if formattingConfiguration.isTextFormattingEnabled {
                 text = ParagraphFormatter.format(text)
             }
 
             text = WordReplacementService.shared.applyReplacements(to: text, using: modelContext)
             let cleanedText = text
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.formatting.end",
+                details: "chars=\(cleanedText.count)"
+            )
 
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.audio_metadata.begin")
             let actualDuration = await AudioFileMetadata.duration(for: audioURL)
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.audio_metadata.end",
+                details: String(format: "duration_s=%.3f", actualDuration)
+            )
 
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.record.populate.begin")
             transcription.text = cleanedText
             transcription.duration = actualDuration
             transcription.transcriptionModelName = model.displayName
@@ -151,6 +191,7 @@ class TranscriptionPipeline {
             transcription.modeName = modeMetadata.name
             transcription.modeEmoji = modeMetadata.emoji
             finalText = cleanedText
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.record.populate.end")
 
             if !assistant.isFollowUp {
                 let shouldRespondInRecorder =
@@ -187,11 +228,22 @@ class TranscriptionPipeline {
                     }
 
                     do {
+                        RecordingPerformanceDiagnostics.shared.mark("pipeline.context_snapshot.begin")
                         let contextSnapshot = await recordingContextSnapshot()
+                        RecordingPerformanceDiagnostics.shared.mark(
+                            "pipeline.context_snapshot.end",
+                            details:
+                                "selected_chars=\(contextSnapshot?.selectedText?.count ?? 0) clipboard_chars=\(contextSnapshot?.clipboardText?.count ?? 0) screen_chars=\(contextSnapshot?.screenText?.count ?? 0)"
+                        )
+                        RecordingPerformanceDiagnostics.shared.mark("pipeline.enhancement.begin")
                         let (enhancedText, enhancementDuration, promptName) = try await enhancementService.enhance(
                             textForAI,
                             configuration: resolvedEnhancementConfiguration,
                             contextSnapshot: contextSnapshot
+                        )
+                        RecordingPerformanceDiagnostics.shared.mark(
+                            "pipeline.enhancement.end",
+                            details: "chars=\(enhancedText.count)"
                         )
                         transcription.enhancedText = enhancedText
                         transcription.aiEnhancementModelName =
@@ -203,6 +255,10 @@ class TranscriptionPipeline {
                         transcription.aiRequestUserMessage = enhancementService.lastUserMessageSent
                         finalText = enhancedText
                     } catch {
+                        RecordingPerformanceDiagnostics.shared.mark(
+                            "pipeline.enhancement.failed",
+                            details: "error=\(error.localizedDescription)"
+                        )
                         let errorDescription = EnhancementFailureFormatter.description(for: error)
                         let failureMessage = EnhancementFailureFormatter.message(description: errorDescription)
                         transcription.enhancedText = failureMessage
@@ -222,8 +278,13 @@ class TranscriptionPipeline {
             }
 
             transcription.transcriptionStatus = TranscriptionStatus.completed.rawValue
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.processing.completed")
         } catch {
             let errorDescription = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.transcription.failed",
+                details: "error=\(errorDescription)"
+            )
 
             if let nativeAppleError = error as? NativeAppleTranscriptionService.ServiceError,
                 nativeAppleError.shouldShowNotification
@@ -242,6 +303,7 @@ class TranscriptionPipeline {
         }
 
         func saveTranscriptionAndPostCompletion() {
+            RecordingPerformanceDiagnostics.shared.mark("pipeline.persistence.begin")
             if transcription.transcriptionStatus == TranscriptionStatus.completed.rawValue {
                 do {
                     didInsertSessionMetric = try SessionMetricRecorder.recordRecorderSession(
@@ -263,6 +325,10 @@ class TranscriptionPipeline {
             } catch {
                 logger.error("Failed to save transcription: \(error, privacy: .public)")
             }
+            RecordingPerformanceDiagnostics.shared.mark(
+                "pipeline.persistence.end",
+                details: "metric_inserted=\(didInsertSessionMetric)"
+            )
         }
 
         if shouldCancel() {
@@ -270,6 +336,7 @@ class TranscriptionPipeline {
             return
         }
 
+        RecordingPerformanceDiagnostics.shared.mark("pipeline.delivery.begin")
         await delivery.deliver(
             TranscriptionDelivery.Request(
                 transcription: transcription,
@@ -287,8 +354,10 @@ class TranscriptionPipeline {
                 failResponse: assistant.failResponse
             )
         )
+        RecordingPerformanceDiagnostics.shared.mark("pipeline.delivery.end")
 
         saveTranscriptionAndPostCompletion()
+        RecordingPerformanceDiagnostics.shared.mark("pipeline.completed")
     }
 
     private func metadata(for mode: ModeConfig?) -> (name: String?, emoji: String?) {
