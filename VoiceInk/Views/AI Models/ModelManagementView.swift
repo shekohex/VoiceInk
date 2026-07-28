@@ -243,14 +243,14 @@ struct ModelManagementView: View {
 
     private var localModelsSection: some View {
         VStack(spacing: 12) {
-            ForEach(appleSpeechModels, id: \.id) { model in
-                localModelCard(model)
-            }
-
             VoiceInkRefineModelCardView(
                 service: voiceInkRefineService,
                 deleteAction: confirmDeleteVoiceInkRefineModel
             )
+
+            ForEach(appleSpeechModels, id: \.id) { model in
+                localModelCard(model)
+            }
 
             ForEach(downloadableLocalModels, id: \.id) { model in
                 localModelCard(model)

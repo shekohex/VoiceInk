@@ -242,6 +242,7 @@
       }
     },
     "%@ of %@ • %@/s" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16322,6 +16323,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载的 Core ML 模型压缩包可能已损坏。请尝试删除该模型后重新下载。请检查可用磁盘空间。"
+          }
+        }
+      }
+    },
+    "The downloaded file for %@ failed integrity verification." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Integritätsprüfung der heruntergeladenen Datei für %@ ist fehlgeschlagen."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载的 %@ 文件未通过完整性验证。"
           }
         }
       }

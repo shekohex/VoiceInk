@@ -18,7 +18,13 @@ struct VoiceInkRefineModelCardView: View {
             actionSection
         }
         .padding(16)
-        .background(AppMaterialCardBackground())
+        .background(
+            AppMaterialCardBackground()
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
+                        .stroke(AppTheme.Accent.border, lineWidth: 1.5)
+                )
+        )
     }
 
     private var headerSection: some View {
@@ -26,6 +32,20 @@ struct VoiceInkRefineModelCardView: View {
             Text(VoiceInkRefineService.modelName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(.labelColor))
+
+            Text("New")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppTheme.Text.primary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(AppTheme.Accent.fillStrong)
+                        .overlay(
+                            Capsule()
+                                .stroke(AppTheme.Accent.border, lineWidth: 1)
+                        )
+                )
 
             Spacer()
         }
@@ -133,7 +153,11 @@ struct VoiceInkRefineModelCardView: View {
                         service.startDownload()
                     } label: {
                         HStack(spacing: 4) {
-                            Text("Download")
+                            if service.downloadError == nil {
+                                Text("Download")
+                            } else {
+                                Text("Retry")
+                            }
                             Image(systemName: "arrow.down.circle")
                         }
                         .font(.system(size: 12, weight: .medium))
@@ -165,19 +189,6 @@ struct VoiceInkRefineModelCardView: View {
             fromByteCount: service.totalDownloadBytes,
             countStyle: .file
         )
-
-        if service.downloadBytesPerSecond >= 1 {
-            let speed = ByteCountFormatter.string(
-                fromByteCount: Int64(service.downloadBytesPerSecond),
-                countStyle: .file
-            )
-            return String(
-                format: String(localized: "%@ of %@ • %@/s"),
-                downloaded,
-                total,
-                speed
-            )
-        }
 
         return String(
             format: String(localized: "%@ of %@"),

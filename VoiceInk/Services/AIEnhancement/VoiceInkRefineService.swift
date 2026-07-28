@@ -45,7 +45,6 @@ final class VoiceInkRefineService: ObservableObject {
     @Published private(set) var downloadProgress = 0.0
     private(set) var downloadedBytes: Int64 = 0
     private(set) var totalDownloadBytes = VoiceInkRefineModelDownloader.totalBytes
-    private(set) var downloadBytesPerSecond = 0.0
     private(set) var isFinalizingDownload = false
     @Published private(set) var downloadError: String?
 
@@ -124,7 +123,6 @@ final class VoiceInkRefineService: ObservableObject {
             }
             downloadProgress = 0
             downloadedBytes = 0
-            downloadBytesPerSecond = 0
             isFinalizingDownload = false
             downloadError = nil
             refreshDownloadedState()
@@ -181,14 +179,12 @@ final class VoiceInkRefineService: ObservableObject {
         downloadProgress = 0
         downloadedBytes = 0
         totalDownloadBytes = VoiceInkRefineModelDownloader.totalBytes
-        downloadBytesPerSecond = 0
         isFinalizingDownload = false
         downloadError = nil
         isDownloading = true
 
         defer {
             isDownloading = false
-            downloadBytesPerSecond = 0
             isFinalizingDownload = false
             downloadTask = nil
         }
@@ -200,33 +196,9 @@ final class VoiceInkRefineService: ObservableObject {
                 modelRootDirectory: modelRootDirectory
             )
             let progressTask = Task { @MainActor [weak self, downloader] in
-                var lastSampleDate = Date()
-                var lastSampleBytes = downloader.progress.transferredBytes
-                var smoothedBytesPerSecond = 0.0
-
                 while !Task.isCancelled {
-                    let snapshot = downloader.progress
-                    let now = Date()
-                    let elapsed = now.timeIntervalSince(lastSampleDate)
-
-                    if elapsed >= 0.25 {
-                        let byteDelta = max(
-                            0,
-                            snapshot.transferredBytes - lastSampleBytes
-                        )
-                        let instantaneousSpeed = Double(byteDelta) / elapsed
-                        smoothedBytesPerSecond = smoothedBytesPerSecond == 0
-                            ? instantaneousSpeed
-                            : (smoothedBytesPerSecond * 0.7) + (instantaneousSpeed * 0.3)
-                        lastSampleDate = now
-                        lastSampleBytes = snapshot.transferredBytes
-                    }
-
-                    self?.applyDownloadProgress(
-                        snapshot,
-                        bytesPerSecond: smoothedBytesPerSecond
-                    )
-                    try? await Task.sleep(for: .milliseconds(250))
+                    self?.applyDownloadProgress(downloader.progress)
+                    try? await Task.sleep(for: .seconds(2))
                 }
             }
             defer {
@@ -247,7 +219,7 @@ final class VoiceInkRefineService: ObservableObject {
                     downloadOperation.cancel()
                 }
                 try Task.checkCancellation()
-                applyDownloadProgress(downloader.progress, bytesPerSecond: 0)
+                applyDownloadProgress(downloader.progress)
                 refreshDownloadedState()
                 downloadProgress = isDownloaded ? 1 : 0
                 NotificationCenter.default.post(name: .AppSettingsDidChange, object: nil)
@@ -287,12 +259,10 @@ final class VoiceInkRefineService: ObservableObject {
 
     @MainActor
     private func applyDownloadProgress(
-        _ progress: VoiceInkRefineDownloadProgress,
-        bytesPerSecond: Double
+        _ progress: VoiceInkRefineDownloadProgress
     ) {
         downloadedBytes = progress.downloadedBytes
         totalDownloadBytes = progress.totalBytes
-        downloadBytesPerSecond = progress.isFinalizing ? 0 : bytesPerSecond
         isFinalizingDownload = progress.isFinalizing
         downloadProgress = progress.totalBytes > 0
             ? min(1, Double(progress.downloadedBytes) / Double(progress.totalBytes))

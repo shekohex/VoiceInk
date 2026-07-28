@@ -1,9 +1,9 @@
+import CryptoKit
 import Foundation
 
 struct VoiceInkRefineDownloadProgress: Sendable {
     let downloadedBytes: Int64
     let totalBytes: Int64
-    let transferredBytes: Int64
     let isFinalizing: Bool
 }
 
@@ -13,6 +13,7 @@ enum VoiceInkRefineDownloadError: LocalizedError {
     case unexpectedStatusCode(Int, String)
     case invalidContentRange(String)
     case invalidFileSize(String, expected: Int64, actual: Int64)
+    case invalidChecksum(String)
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum VoiceInkRefineDownloadError: LocalizedError {
             return String(
                 localized: "The downloaded size for \(path) was \(actual) bytes instead of \(expected) bytes."
             )
+        case let .invalidChecksum(path):
+            return String(localized: "The downloaded file for \(path) failed integrity verification.")
         }
     }
 }
@@ -36,6 +39,13 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
     struct ModelFile: Sendable {
         let path: String
         let size: Int64
+        let sha256: String?
+
+        init(path: String, size: Int64, sha256: String? = nil) {
+            self.path = path
+            self.size = size
+            self.sha256 = sha256
+        }
     }
 
     static let files: [ModelFile] = [
@@ -44,11 +54,19 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
         ModelFile(path: "README.md", size: 1_087),
         ModelFile(path: "chat_template.jinja", size: 7_650),
         ModelFile(path: "config.json", size: 3_113),
-        ModelFile(path: "model.safetensors", size: 1_722_271_785),
+        ModelFile(
+            path: "model.safetensors",
+            size: 1_722_271_785,
+            sha256: "e501232c737f47a2ac2b033171ec909be8295de7928bbd4510021dbb3862153c"
+        ),
         ModelFile(path: "model.safetensors.index.json", size: 81_722),
         ModelFile(path: "preprocessor_config.json", size: 390),
         ModelFile(path: "processor_config.json", size: 991),
-        ModelFile(path: "tokenizer.json", size: 19_989_325),
+        ModelFile(
+            path: "tokenizer.json",
+            size: 19_989_325,
+            sha256: "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+        ),
         ModelFile(path: "tokenizer_config.json", size: 1_165),
         ModelFile(path: "video_preprocessor_config.json", size: 385),
         ModelFile(path: "vocab.json", size: 6_722_759),
@@ -73,33 +91,12 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
         }
     }
 
-    private struct DownloadJob: Sendable {
-        let file: ModelFile
-        let partIndex: Int
-        let startByte: Int64
-        let endByte: Int64
-        let destination: URL
-
-        var identifier: String {
-            "\(file.path)#\(partIndex)"
-        }
-
-        var expectedSize: Int64 {
-            endByte - startByte + 1
-        }
-
-        var isWholeFile: Bool {
-            startByte == 0 && expectedSize == file.size
-        }
-    }
-
     private let repositoryID: String
     private let revision: String
     private let snapshotDirectory: URL
-    private let partsDirectory: URL
+    private let partialsDirectory: URL
     private let progressTracker = ProgressTracker(totalBytes: totalBytes)
-    private let maximumConcurrentDownloads = 8
-    private let parallelDownloadThreshold: Int64 = 64 * 1_024 * 1_024
+    private let maximumAttempts = 4
 
     init(repositoryID: String, revision: String, modelRootDirectory: URL) {
         self.repositoryID = repositoryID
@@ -109,7 +106,7 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             repositoryID: repositoryID,
             revision: revision
         )
-        partsDirectory = modelRootDirectory
+        partialsDirectory = modelRootDirectory
             .appendingPathComponent(".voiceink-downloads")
             .appendingPathComponent(revision)
     }
@@ -125,57 +122,34 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             withIntermediateDirectories: true
         )
         try FileManager.default.createDirectory(
-            at: partsDirectory,
+            at: partialsDirectory,
             withIntermediateDirectories: true
         )
 
-        let jobs = try prepareDownloadJobs()
-        if !jobs.isEmpty {
-            let configuration = URLSessionConfiguration.default
-            configuration.httpMaximumConnectionsPerHost = maximumConcurrentDownloads
-            configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-            configuration.urlCache = nil
-            configuration.timeoutIntervalForRequest = 120
-            configuration.timeoutIntervalForResource = 24 * 60 * 60
-            configuration.waitsForConnectivity = true
-
-            let delegateQueue = OperationQueue()
-            delegateQueue.name = "com.prakashjoshipax.voiceink.refine-download"
-            delegateQueue.qualityOfService = .utility
-            delegateQueue.maxConcurrentOperationCount = 1
-
-            let delegate = DownloadSessionDelegate(progressTracker: progressTracker)
-            let session = URLSession(
-                configuration: configuration,
-                delegate: delegate,
-                delegateQueue: delegateQueue
-            )
-            defer {
-                session.invalidateAndCancel()
-            }
-
-            try await download(jobs, using: session, delegate: delegate)
+        let pendingFiles = try prepareFiles()
+        for file in pendingFiles {
+            try Task.checkCancellation()
+            try await download(file)
         }
 
         try Task.checkCancellation()
         progressTracker.beginFinalizing()
-        try assembleDownloadedFiles()
         try validateSnapshot()
 
-        if FileManager.default.fileExists(atPath: partsDirectory.path) {
-            try FileManager.default.removeItem(at: partsDirectory)
+        if FileManager.default.fileExists(atPath: partialsDirectory.path) {
+            try FileManager.default.removeItem(at: partialsDirectory)
         }
     }
 
-    private func prepareDownloadJobs() throws -> [DownloadJob] {
-        var jobs: [DownloadJob] = []
+    private func prepareFiles() throws -> [ModelFile] {
+        var pendingFiles: [ModelFile] = []
 
         for file in Self.files {
             try Task.checkCancellation()
 
             let finalURL = snapshotDirectory.appendingPathComponent(file.path)
             if Self.fileSize(at: finalURL) == file.size {
-                progressTracker.addPersistedBytes(file.size)
+                progressTracker.update(identifier: file.path, downloadedBytes: file.size)
                 continue
             }
 
@@ -183,156 +157,205 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
                 try FileManager.default.removeItem(at: finalURL)
             }
 
-            let partCount = file.size >= parallelDownloadThreshold ? maximumConcurrentDownloads : 1
-            for partIndex in 0..<partCount {
-                let range = byteRange(partIndex: partIndex, partCount: partCount, fileSize: file.size)
-                let destination = partURL(for: file, partIndex: partIndex)
-                let expectedSize = range.end - range.start + 1
-
-                if Self.fileSize(at: destination) == expectedSize {
-                    progressTracker.addPersistedBytes(expectedSize)
-                    continue
-                }
-
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
-                }
-
-                jobs.append(
-                    DownloadJob(
-                        file: file,
-                        partIndex: partIndex,
-                        startByte: range.start,
-                        endByte: range.end,
-                        destination: destination
-                    )
-                )
+            let partialURL = partialURL(for: file)
+            let partialSize = Self.fileSize(at: partialURL) ?? 0
+            if partialSize > file.size {
+                clearPartialDownload(for: file)
+                progressTracker.update(identifier: file.path, downloadedBytes: 0)
+            } else {
+                progressTracker.update(identifier: file.path, downloadedBytes: partialSize)
             }
+
+            pendingFiles.append(file)
         }
 
-        return jobs
+        return pendingFiles
     }
 
-    private func download(
-        _ jobs: [DownloadJob],
-        using session: URLSession,
-        delegate: DownloadSessionDelegate
-    ) async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            var iterator = jobs.makeIterator()
-            let initialJobCount = min(maximumConcurrentDownloads, jobs.count)
+    private func download(_ file: ModelFile) async throws {
+        var attempt = 1
 
-            for _ in 0..<initialJobCount {
-                if let job = iterator.next() {
-                    group.addTask { [self] in
-                        try await download(job, using: session, delegate: delegate)
-                    }
-                }
-            }
+        while true {
+            try Task.checkCancellation()
 
-            while try await group.next() != nil {
-                try Task.checkCancellation()
-                if let job = iterator.next() {
-                    group.addTask { [self] in
-                        try await download(job, using: session, delegate: delegate)
-                    }
+            do {
+                try await performDownload(file)
+                return
+            } catch {
+                if Task.isCancelled || Self.isCancellation(error) {
+                    throw CancellationError()
                 }
+
+                guard attempt < maximumAttempts, Self.isTransient(error) else {
+                    throw error
+                }
+
+                let delay = min(pow(2, Double(attempt - 1)), 4)
+                attempt += 1
+                try await Task.sleep(for: .seconds(delay))
             }
         }
     }
 
-    private func download(
-        _ job: DownloadJob,
-        using session: URLSession,
-        delegate: DownloadSessionDelegate
-    ) async throws {
-        try Task.checkCancellation()
+    private func performDownload(_ file: ModelFile) async throws {
+        let partialURL = partialURL(for: file)
+        let validatorURL = validatorURL(for: file)
 
-        guard let url = URL(
-            string: "https://huggingface.co/\(repositoryID)/resolve/\(revision)/\(job.file.path)"
-        ) else {
-            throw VoiceInkRefineDownloadError.invalidDownloadURL(job.file.path)
+        try FileManager.default.createDirectory(
+            at: partialURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        var partialSize = Self.fileSize(at: partialURL) ?? 0
+        if partialSize == file.size {
+            try Self.validateDownloadedFile(at: partialURL, file: file)
+            try installDownloadedFile(at: partialURL, file: file)
+            return
+        }
+
+        if partialSize > file.size {
+            clearPartialDownload(for: file)
+            partialSize = 0
+            progressTracker.update(identifier: file.path, downloadedBytes: 0)
+        }
+
+        guard let url = downloadURL(for: file) else {
+            throw VoiceInkRefineDownloadError.invalidDownloadURL(file.path)
         }
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 24 * 60 * 60
-        request.setValue(
-            "bytes=\(job.startByte)-\(job.endByte)",
-            forHTTPHeaderField: "Range"
-        )
         request.setValue("VoiceInk", forHTTPHeaderField: "User-Agent")
 
-        let task = session.downloadTask(with: request)
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                delegate.register(
-                    task: task,
-                    job: job,
-                    continuation: continuation
+        var resumeOffset: Int64 = 0
+        let validator = (
+            try? String(contentsOf: validatorURL, encoding: .utf8)
+        )?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if partialSize > 0, let validator, !validator.isEmpty {
+            request.setValue("bytes=\(partialSize)-", forHTTPHeaderField: "Range")
+            request.setValue(validator, forHTTPHeaderField: "If-Range")
+            resumeOffset = partialSize
+        } else if partialSize > 0 {
+            clearPartialDownload(for: file)
+            partialSize = 0
+            progressTracker.update(identifier: file.path, downloadedBytes: 0)
+        }
+
+        let response = try await streamDownload(
+            request: request,
+            to: partialURL,
+            file: file,
+            resumeOffset: resumeOffset,
+            onProgress: { [progressTracker] downloadedBytes in
+                progressTracker.update(
+                    identifier: file.path,
+                    downloadedBytes: downloadedBytes
                 )
-                task.resume()
+            },
+            onResponse: { [weak self] response in
+                guard response.statusCode != 206 else {
+                    return
+                }
+                self?.persistResumeValidator(
+                    from: response,
+                    to: validatorURL
+                )
+            }
+        )
+
+        if response.statusCode == 416 {
+            clearPartialDownload(for: file)
+            progressTracker.update(identifier: file.path, downloadedBytes: 0)
+            throw VoiceInkRefineDownloadError.invalidContentRange(file.path)
+        }
+
+        guard response.statusCode == 200 || response.statusCode == 206 else {
+            throw VoiceInkRefineDownloadError.unexpectedStatusCode(
+                response.statusCode,
+                file.path
+            )
+        }
+
+        do {
+            try Self.validateDownloadedFile(at: partialURL, file: file)
+        } catch {
+            clearPartialDownload(for: file)
+            progressTracker.update(identifier: file.path, downloadedBytes: 0)
+            throw error
+        }
+
+        try installDownloadedFile(at: partialURL, file: file)
+    }
+
+    private func streamDownload(
+        request: URLRequest,
+        to destination: URL,
+        file: ModelFile,
+        resumeOffset: Int64,
+        onProgress: @escaping @Sendable (Int64) -> Void,
+        onResponse: @escaping @Sendable (HTTPURLResponse) -> Void
+    ) async throws -> HTTPURLResponse {
+        let delegate = StreamingDownloadDelegate(
+            destination: destination,
+            file: file,
+            resumeOffset: resumeOffset,
+            rangeHeader: request.value(forHTTPHeaderField: "Range"),
+            ifRangeHeader: request.value(forHTTPHeaderField: "If-Range"),
+            onProgress: onProgress,
+            onResponse: onResponse
+        )
+
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.urlCache = nil
+        configuration.timeoutIntervalForRequest = 120
+        configuration.timeoutIntervalForResource = 24 * 60 * 60
+        configuration.waitsForConnectivity = true
+
+        let delegateQueue = OperationQueue()
+        delegateQueue.name = "com.prakashjoshipax.voiceink.refine-download"
+        delegateQueue.qualityOfService = .utility
+        delegateQueue.maxConcurrentOperationCount = 1
+
+        let session = URLSession(
+            configuration: configuration,
+            delegate: delegate,
+            delegateQueue: delegateQueue
+        )
+        defer {
+            session.invalidateAndCancel()
+        }
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = session.dataTask(with: request)
+                delegate.attach(continuation: continuation, task: task)
+                if Task.isCancelled {
+                    task.cancel()
+                } else {
+                    task.resume()
+                }
             }
         } onCancel: {
-            task.cancel()
+            delegate.cancel()
         }
     }
 
-    private func assembleDownloadedFiles() throws {
-        for file in Self.files {
-            try Task.checkCancellation()
+    private func installDownloadedFile(at partialURL: URL, file: ModelFile) throws {
+        let finalURL = snapshotDirectory.appendingPathComponent(file.path)
+        try FileManager.default.createDirectory(
+            at: finalURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
 
-            let finalURL = snapshotDirectory.appendingPathComponent(file.path)
-            if Self.fileSize(at: finalURL) == file.size {
-                continue
-            }
-
-            let partCount = file.size >= parallelDownloadThreshold ? maximumConcurrentDownloads : 1
-            try FileManager.default.createDirectory(
-                at: finalURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-
-            if FileManager.default.fileExists(atPath: finalURL.path) {
-                try FileManager.default.removeItem(at: finalURL)
-            }
-
-            if partCount == 1 {
-                try FileManager.default.moveItem(
-                    at: partURL(for: file, partIndex: 0),
-                    to: finalURL
-                )
-            } else {
-                FileManager.default.createFile(atPath: finalURL.path, contents: nil)
-                let output = try FileHandle(forWritingTo: finalURL)
-                defer {
-                    try? output.close()
-                }
-
-                for partIndex in 0..<partCount {
-                    try Task.checkCancellation()
-                    let input = try FileHandle(
-                        forReadingFrom: partURL(for: file, partIndex: partIndex)
-                    )
-                    defer {
-                        try? input.close()
-                    }
-
-                    while let data = try input.read(upToCount: 1_024 * 1_024), !data.isEmpty {
-                        try Task.checkCancellation()
-                        try output.write(contentsOf: data)
-                    }
-                }
-            }
-
-            let actualSize = Self.fileSize(at: finalURL) ?? 0
-            guard actualSize == file.size else {
-                throw VoiceInkRefineDownloadError.invalidFileSize(
-                    file.path,
-                    expected: file.size,
-                    actual: actualSize
-                )
-            }
+        if FileManager.default.fileExists(atPath: finalURL.path) {
+            try FileManager.default.removeItem(at: finalURL)
         }
+
+        try FileManager.default.moveItem(at: partialURL, to: finalURL)
+        try? FileManager.default.removeItem(at: validatorURL(for: file))
+        progressTracker.update(identifier: file.path, downloadedBytes: file.size)
     }
 
     private func validateSnapshot() throws {
@@ -350,72 +373,195 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
         }
     }
 
-    private func byteRange(
-        partIndex: Int,
-        partCount: Int,
-        fileSize: Int64
-    ) -> (start: Int64, end: Int64) {
-        let baseSize = fileSize / Int64(partCount)
-        let remainder = fileSize % Int64(partCount)
-        let extraByteCount = min(Int64(partIndex), remainder)
-        let start = Int64(partIndex) * baseSize + extraByteCount
-        let currentSize = baseSize + (Int64(partIndex) < remainder ? 1 : 0)
-        return (start, start + currentSize - 1)
+    private func downloadURL(for file: ModelFile) -> URL? {
+        let encodedPath =
+            file.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+            ?? file.path
+        return URL(
+            string: "https://huggingface.co/\(repositoryID)/resolve/\(revision)/\(encodedPath)"
+        )
     }
 
-    private func partURL(for file: ModelFile, partIndex: Int) -> URL {
-        partsDirectory
-            .appendingPathComponent(file.path, isDirectory: true)
-            .appendingPathComponent("\(partIndex).part")
+    private func partialURL(for file: ModelFile) -> URL {
+        partialsDirectory
+            .appendingPathComponent(file.path)
+            .appendingPathExtension("partial")
+    }
+
+    private func validatorURL(for file: ModelFile) -> URL {
+        partialURL(for: file).appendingPathExtension("etag")
+    }
+
+    private func clearPartialDownload(for file: ModelFile) {
+        try? FileManager.default.removeItem(at: partialURL(for: file))
+        try? FileManager.default.removeItem(at: validatorURL(for: file))
+    }
+
+    private func persistResumeValidator(
+        from response: HTTPURLResponse,
+        to validatorURL: URL
+    ) {
+        let validator: String?
+        if let etag = response.value(forHTTPHeaderField: "ETag"),
+           !etag.hasPrefix("W/")
+        {
+            validator = etag
+        } else {
+            validator = response.value(forHTTPHeaderField: "Last-Modified")
+        }
+
+        if let validator {
+            try? validator.write(
+                to: validatorURL,
+                atomically: true,
+                encoding: .utf8
+            )
+        } else {
+            try? FileManager.default.removeItem(at: validatorURL)
+        }
+    }
+
+    private static func validateDownloadedFile(
+        at url: URL,
+        file: ModelFile
+    ) throws {
+        let actualSize = fileSize(at: url) ?? 0
+        guard actualSize == file.size else {
+            throw VoiceInkRefineDownloadError.invalidFileSize(
+                file.path,
+                expected: file.size,
+                actual: actualSize
+            )
+        }
+
+        guard let expectedSHA256 = file.sha256 else {
+            return
+        }
+
+        let actualSHA256 = try sha256(of: url)
+        guard actualSHA256 == expectedSHA256 else {
+            throw VoiceInkRefineDownloadError.invalidChecksum(file.path)
+        }
+    }
+
+    private static func sha256(of url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer {
+            try? handle.close()
+        }
+
+        var hasher = SHA256()
+        while let data = try handle.read(upToCount: 4 * 1_024 * 1_024),
+              !data.isEmpty
+        {
+            try Task.checkCancellation()
+            hasher.update(data: data)
+        }
+
+        return hasher.finalize()
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private static func fileSize(at url: URL) -> Int64? {
         guard FileManager.default.fileExists(atPath: url.path),
-              let handle = try? FileHandle(forReadingFrom: url)
+              let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber
         else {
             return nil
         }
-        defer {
-            try? handle.close()
-        }
-        return try? Int64(handle.seekToEnd())
+
+        return size.int64Value
     }
 
-    private final class DownloadSessionDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-        private final class Context: @unchecked Sendable {
-            let job: DownloadJob
-            let continuation: CheckedContinuation<Void, Error>
-            var completionError: Error?
-            var didPersistDownload = false
+    private static func isTransient(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            return [
+                .timedOut,
+                .cannotFindHost,
+                .cannotConnectToHost,
+                .networkConnectionLost,
+                .dnsLookupFailed,
+                .notConnectedToInternet,
+                .resourceUnavailable,
+                .secureConnectionFailed,
+            ].contains(urlError.code)
+        }
 
-            init(
-                job: DownloadJob,
-                continuation: CheckedContinuation<Void, Error>
-            ) {
-                self.job = job
-                self.continuation = continuation
+        switch error {
+        case VoiceInkRefineDownloadError.invalidContentRange,
+             VoiceInkRefineDownloadError.invalidFileSize,
+             VoiceInkRefineDownloadError.invalidChecksum:
+            return true
+        case let VoiceInkRefineDownloadError.unexpectedStatusCode(statusCode, _):
+            return statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
+        default:
+            return false
+        }
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain
+            && nsError.code == NSURLErrorCancelled
+    }
+
+    private final class StreamingDownloadDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        private struct State {
+            var continuation: CheckedContinuation<HTTPURLResponse, Error>?
+            var task: URLSessionDataTask?
+            var handle: FileHandle?
+            var writeError: Error?
+            var responseError: Error?
+            var bytesWritten: Int64 = 0
+            var finished = false
+        }
+
+        private let destination: URL
+        private let file: ModelFile
+        private let resumeOffset: Int64
+        private let rangeHeader: String?
+        private let ifRangeHeader: String?
+        private let onProgress: @Sendable (Int64) -> Void
+        private let onResponse: @Sendable (HTTPURLResponse) -> Void
+        private let lock = NSLock()
+        private var state = State()
+
+        init(
+            destination: URL,
+            file: ModelFile,
+            resumeOffset: Int64,
+            rangeHeader: String?,
+            ifRangeHeader: String?,
+            onProgress: @escaping @Sendable (Int64) -> Void,
+            onResponse: @escaping @Sendable (HTTPURLResponse) -> Void
+        ) {
+            self.destination = destination
+            self.file = file
+            self.resumeOffset = resumeOffset
+            self.rangeHeader = rangeHeader
+            self.ifRangeHeader = ifRangeHeader
+            self.onProgress = onProgress
+            self.onResponse = onResponse
+        }
+
+        func attach(
+            continuation: CheckedContinuation<HTTPURLResponse, Error>,
+            task: URLSessionDataTask
+        ) {
+            withState {
+                $0.continuation = continuation
+                $0.task = task
             }
         }
 
-        private let lock = NSLock()
-        private let progressTracker: ProgressTracker
-        private var contexts: [Int: Context] = [:]
-
-        init(progressTracker: ProgressTracker) {
-            self.progressTracker = progressTracker
-        }
-
-        func register(
-            task: URLSessionDownloadTask,
-            job: DownloadJob,
-            continuation: CheckedContinuation<Void, Error>
-        ) {
-            lock.lock()
-            contexts[task.taskIdentifier] = Context(
-                job: job,
-                continuation: continuation
-            )
-            lock.unlock()
+        func cancel() {
+            let task = withState { $0.task }
+            task?.cancel()
         }
 
         func urlSession(
@@ -425,75 +571,96 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             newRequest request: URLRequest,
             completionHandler: @escaping (URLRequest?) -> Void
         ) {
-            guard let context = context(for: task) else {
-                completionHandler(request)
-                return
-            }
-
             var redirectedRequest = request
-            redirectedRequest.setValue(
-                "bytes=\(context.job.startByte)-\(context.job.endByte)",
-                forHTTPHeaderField: "Range"
-            )
             redirectedRequest.setValue("VoiceInk", forHTTPHeaderField: "User-Agent")
+            if let rangeHeader {
+                redirectedRequest.setValue(rangeHeader, forHTTPHeaderField: "Range")
+            }
+            if let ifRangeHeader {
+                redirectedRequest.setValue(ifRangeHeader, forHTTPHeaderField: "If-Range")
+            }
             completionHandler(redirectedRequest)
         }
 
         func urlSession(
             _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didWriteData bytesWritten: Int64,
-            totalBytesWritten: Int64,
-            totalBytesExpectedToWrite: Int64
+            dataTask: URLSessionDataTask,
+            didReceive response: URLResponse,
+            completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
         ) {
-            guard let context = context(for: downloadTask) else {
-                return
-            }
-            progressTracker.update(
-                identifier: context.job.identifier,
-                downloadedBytes: min(totalBytesWritten, context.job.expectedSize)
-            )
-        }
-
-        func urlSession(
-            _ session: URLSession,
-            downloadTask: URLSessionDownloadTask,
-            didFinishDownloadingTo location: URL
-        ) {
-            guard let context = context(for: downloadTask) else {
+            guard let httpResponse = response as? HTTPURLResponse else {
+                withState {
+                    $0.responseError = VoiceInkRefineDownloadError.invalidResponse(
+                        file.path
+                    )
+                }
+                completionHandler(.cancel)
                 return
             }
 
             do {
-                try validateResponse(for: downloadTask, job: context.job)
+                try validateResponse(httpResponse)
 
-                let actualSize = VoiceInkRefineModelDownloader.fileSize(at: location) ?? 0
-                guard actualSize == context.job.expectedSize else {
-                    throw VoiceInkRefineDownloadError.invalidFileSize(
-                        context.job.file.path,
-                        expected: context.job.expectedSize,
-                        actual: actualSize
-                    )
+                guard httpResponse.statusCode == 200 || httpResponse.statusCode == 206 else {
+                    completionHandler(.allow)
+                    return
                 }
 
-                try FileManager.default.createDirectory(
-                    at: context.job.destination.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                if FileManager.default.fileExists(atPath: context.job.destination.path) {
-                    try FileManager.default.removeItem(at: context.job.destination)
+                onResponse(httpResponse)
+
+                if !FileManager.default.fileExists(atPath: destination.path) {
+                    FileManager.default.createFile(atPath: destination.path, contents: nil)
                 }
-                try FileManager.default.moveItem(
-                    at: location,
-                    to: context.job.destination
-                )
-                progressTracker.finish(
-                    identifier: context.job.identifier,
-                    persistedBytes: context.job.expectedSize
-                )
-                context.didPersistDownload = true
+
+                let handle = try FileHandle(forWritingTo: destination)
+                let isResuming = httpResponse.statusCode == 206
+                if isResuming {
+                    try handle.seekToEnd()
+                } else {
+                    try handle.truncate(atOffset: 0)
+                }
+
+                let baseBytes = isResuming ? resumeOffset : 0
+                withState {
+                    $0.handle = handle
+                    $0.bytesWritten = baseBytes
+                }
+                onProgress(baseBytes)
+                completionHandler(.allow)
             } catch {
-                context.completionError = error
+                withState {
+                    $0.responseError = error
+                }
+                completionHandler(.cancel)
+            }
+        }
+
+        func urlSession(
+            _ session: URLSession,
+            dataTask: URLSessionDataTask,
+            didReceive data: Data
+        ) {
+            let downloadedBytes: Int64? = withState {
+                guard let handle = $0.handle,
+                      $0.writeError == nil
+                else {
+                    return nil
+                }
+
+                do {
+                    try handle.write(contentsOf: data)
+                    $0.bytesWritten += Int64(data.count)
+                    return $0.bytesWritten
+                } catch {
+                    $0.writeError = error
+                    return nil
+                }
+            }
+
+            if let downloadedBytes {
+                onProgress(downloadedBytes)
+            } else if withState({ $0.writeError }) != nil {
+                cancel()
             }
         }
 
@@ -502,68 +669,92 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             task: URLSessionTask,
             didCompleteWithError error: Error?
         ) {
-            guard let context = removeContext(for: task) else {
+            let response = task.response as? HTTPURLResponse
+            let completion: (() -> Void)? = withState {
+                guard !$0.finished,
+                      let continuation = $0.continuation
+                else {
+                    return nil
+                }
+
+                $0.finished = true
+                $0.continuation = nil
+                $0.task = nil
+                try? $0.handle?.close()
+                $0.handle = nil
+
+                let responseError = $0.responseError
+                let writeError = $0.writeError
+                return {
+                    if let responseError {
+                        continuation.resume(throwing: responseError)
+                    } else if let writeError {
+                        continuation.resume(throwing: writeError)
+                    } else if let error {
+                        continuation.resume(throwing: error)
+                    } else if let response {
+                        continuation.resume(returning: response)
+                    } else {
+                        continuation.resume(
+                            throwing: VoiceInkRefineDownloadError.invalidResponse(
+                                self.file.path
+                            )
+                        )
+                    }
+                }
+            }
+
+            completion?()
+        }
+
+        private func validateResponse(_ response: HTTPURLResponse) throws {
+            guard response.statusCode == 206 else {
                 return
             }
 
-            if let error {
-                if (error as? URLError)?.code == .cancelled {
-                    context.continuation.resume(throwing: CancellationError())
-                } else {
-                    context.continuation.resume(throwing: error)
-                }
-            } else if let completionError = context.completionError {
-                context.continuation.resume(throwing: completionError)
-            } else if context.didPersistDownload {
-                context.continuation.resume()
-            } else {
-                context.continuation.resume(
-                    throwing: VoiceInkRefineDownloadError.invalidResponse(
-                        context.job.file.path
-                    )
-                )
+            guard resumeOffset > 0,
+                  let contentRange = response.value(forHTTPHeaderField: "Content-Range"),
+                  let range = Self.parseContentRange(contentRange),
+                  range.start == resumeOffset,
+                  range.end < file.size,
+                  range.total == file.size
+            else {
+                throw VoiceInkRefineDownloadError.invalidContentRange(file.path)
             }
         }
 
-        private func validateResponse(
-            for downloadTask: URLSessionDownloadTask,
-            job: DownloadJob
-        ) throws {
-            guard let response = downloadTask.response as? HTTPURLResponse else {
-                throw VoiceInkRefineDownloadError.invalidResponse(job.file.path)
+        private static func parseContentRange(
+            _ value: String
+        ) -> (start: Int64, end: Int64, total: Int64)? {
+            let normalized = value.lowercased()
+            guard normalized.hasPrefix("bytes ") else {
+                return nil
             }
 
-            if response.statusCode == 206 {
-                let expectedPrefix = "bytes \(job.startByte)-\(job.endByte)/"
-                guard let contentRange = response.value(
-                    forHTTPHeaderField: "Content-Range"
-                ),
-                    contentRange.lowercased().hasPrefix(expectedPrefix)
-                else {
-                    throw VoiceInkRefineDownloadError.invalidContentRange(
-                        job.file.path
-                    )
-                }
-            } else if response.statusCode != 200 || !job.isWholeFile {
-                throw VoiceInkRefineDownloadError.unexpectedStatusCode(
-                    response.statusCode,
-                    job.file.path
-                )
+            let components = normalized.dropFirst("bytes ".count).split(separator: "/")
+            guard components.count == 2,
+                  let total = Int64(components[1])
+            else {
+                return nil
             }
+
+            let rangeComponents = components[0].split(separator: "-")
+            guard rangeComponents.count == 2,
+                  let start = Int64(rangeComponents[0]),
+                  let end = Int64(rangeComponents[1])
+            else {
+                return nil
+            }
+
+            return (start, end, total)
         }
 
-        private func context(for task: URLSessionTask) -> Context? {
+        private func withState<T>(_ operation: (inout State) -> T) -> T {
             lock.lock()
-            let context = contexts[task.taskIdentifier]
-            lock.unlock()
-            return context
-        }
-
-        private func removeContext(for task: URLSessionTask) -> Context? {
-            lock.lock()
-            let context = contexts.removeValue(forKey: task.taskIdentifier)
-            lock.unlock()
-            return context
+            defer {
+                lock.unlock()
+            }
+            return operation(&state)
         }
     }
 }
@@ -571,32 +762,16 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
 private final class ProgressTracker: @unchecked Sendable {
     private let lock = NSLock()
     private let totalBytes: Int64
-    private var persistedBytes: Int64 = 0
-    private var transferredBytes: Int64 = 0
-    private var activeBytes: [String: Int64] = [:]
+    private var bytesByFile: [String: Int64] = [:]
     private var isFinalizing = false
 
     init(totalBytes: Int64) {
         self.totalBytes = totalBytes
     }
 
-    func addPersistedBytes(_ byteCount: Int64) {
-        lock.lock()
-        persistedBytes += byteCount
-        lock.unlock()
-    }
-
     func update(identifier: String, downloadedBytes: Int64) {
         lock.lock()
-        activeBytes[identifier] = downloadedBytes
-        lock.unlock()
-    }
-
-    func finish(identifier: String, persistedBytes byteCount: Int64) {
-        lock.lock()
-        activeBytes.removeValue(forKey: identifier)
-        persistedBytes += byteCount
-        transferredBytes += byteCount
+        bytesByFile[identifier] = max(0, downloadedBytes)
         lock.unlock()
     }
 
@@ -610,16 +785,11 @@ private final class ProgressTracker: @unchecked Sendable {
         lock.lock()
         let downloadedBytes = min(
             totalBytes,
-            persistedBytes + activeBytes.values.reduce(Int64(0), +)
-        )
-        let currentTransferredBytes = min(
-            totalBytes,
-            transferredBytes + activeBytes.values.reduce(Int64(0), +)
+            bytesByFile.values.reduce(Int64(0), +)
         )
         let snapshot = VoiceInkRefineDownloadProgress(
             downloadedBytes: downloadedBytes,
             totalBytes: totalBytes,
-            transferredBytes: currentTransferredBytes,
             isFinalizing: isFinalizing
         )
         lock.unlock()
