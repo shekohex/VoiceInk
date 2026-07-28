@@ -47,19 +47,9 @@ class CursorPaster {
     private static func performPasteSession(_ text: String) async -> PasteResult {
         let pasteboard = NSPasteboard.general
         let shouldRestoreClipboard = UserDefaults.standard.bool(forKey: "restoreClipboardAfterPaste")
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.session.begin",
-            details: "chars=\(text.count) restore_clipboard=\(shouldRestoreClipboard)"
-        )
-        RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_snapshot.begin")
         let savedContents = shouldRestoreClipboard ? snapshotClipboard(from: pasteboard) : []
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.clipboard_snapshot.end",
-            details: "items=\(savedContents.count)"
-        )
         let sessionID = UUID().uuidString
 
-        RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_set.begin")
         guard
             ClipboardManager.setClipboard(
                 text,
@@ -67,30 +57,14 @@ class CursorPaster {
                 sessionID: shouldRestoreClipboard ? sessionID : nil
             )
         else {
-            RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_set.failed")
             logger.error("Failed to prepare clipboard for paste")
             return .commandNotPosted
         }
-        RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_set.end")
 
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.pre_delay.begin",
-            details: String(format: "delay_ms=%.0f", prePasteDelay * 1_000)
-        )
         await wait(prePasteDelay)
-        RecordingPerformanceDiagnostics.shared.mark("paste.pre_delay.end")
 
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.command.begin",
-            details: "method=\(String(describing: PasteMethod.current()))"
-        )
         let pasteResult = await postPasteCommand()
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.command.end",
-            details: "posted=\(pasteResult.didPostPasteCommand)"
-        )
         if shouldRestoreClipboard {
-            RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_restore.scheduled")
             scheduleClipboardRestore(
                 savedContents,
                 expectedText: text,
@@ -99,7 +73,6 @@ class CursorPaster {
             )
         }
 
-        RecordingPerformanceDiagnostics.shared.mark("paste.session.end")
         return pasteResult
     }
 
@@ -135,23 +108,15 @@ class CursorPaster {
         )
 
         Task { @MainActor in
-            RecordingPerformanceDiagnostics.shared.mark(
-                "paste.clipboard_restore.delay.begin",
-                details: String(format: "delay_ms=%.0f", delay * 1_000)
-            )
             await wait(delay)
-            RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_restore.delay.end")
             guard pasteboardStillOwnedByPasteSession(pasteboard, expectedText: expectedText, sessionID: sessionID)
             else {
-                RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_restore.skipped_changed")
                 return
             }
-            RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_restore.write.begin")
             pasteboard.clearContents()
             if !savedContents.isEmpty {
                 pasteboard.writeObjects(pasteboardItems(from: savedContents))
             }
-            RecordingPerformanceDiagnostics.shared.mark("paste.clipboard_restore.write.end")
         }
     }
 
@@ -199,9 +164,7 @@ class CursorPaster {
 
     @MainActor
     private static func pasteUsingAppleScript() -> Bool {
-        RecordingPerformanceDiagnostics.shared.mark("paste.applescript.begin")
         guard let script = layoutSwitchesToQWERTYOnCommand ? pasteScriptKeyCode : pasteScriptKeystroke else {
-            RecordingPerformanceDiagnostics.shared.mark("paste.applescript.unavailable")
             logger.error("AppleScript paste script is unavailable")
             return false
         }
@@ -211,10 +174,6 @@ class CursorPaster {
         if let error {
             logger.error("AppleScript paste failed: \(String(describing: error), privacy: .public)")
         }
-        RecordingPerformanceDiagnostics.shared.mark(
-            "paste.applescript.end",
-            details: "success=\(error == nil)"
-        )
         return error == nil
     }
 
@@ -223,9 +182,7 @@ class CursorPaster {
     // Posts Cmd+V via CGEvent without modifying the active input source.
     @MainActor
     private static func pasteFromClipboard() async -> PasteResult {
-        RecordingPerformanceDiagnostics.shared.mark("paste.cgevent.begin")
         guard AXIsProcessTrusted() else {
-            RecordingPerformanceDiagnostics.shared.mark("paste.cgevent.permission_denied")
             logger.error("Accessibility permission is required to paste with simulated key events")
             return .commandNotPosted
         }
@@ -237,7 +194,6 @@ class CursorPaster {
             let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false),
             let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
         else {
-            RecordingPerformanceDiagnostics.shared.mark("paste.cgevent.creation_failed")
             logger.error("Failed to create Cmd+V keyboard events")
             return .commandNotPosted
         }
@@ -254,7 +210,6 @@ class CursorPaster {
         await wait(pasteShortcutEventDelay)
         cmdUp.post(tap: .cghidEventTap)
 
-        RecordingPerformanceDiagnostics.shared.mark("paste.cgevent.end")
         return .commandPosted
     }
 

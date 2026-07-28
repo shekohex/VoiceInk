@@ -113,14 +113,9 @@ class Recorder: NSObject, ObservableObject {
     }
 
     func startRecording(toOutputFile url: URL) async throws {
-        RecordingPerformanceDiagnostics.shared.mark("recorder.entered")
         deviceManager.isRecordingActive = true
 
         let currentDeviceID = deviceManager.getCurrentDevice()
-        RecordingPerformanceDiagnostics.shared.mark(
-            "recorder.device_selected",
-            details: "device_id=\(currentDeviceID)"
-        )
         let lastDeviceID = UserDefaults.standard.string(forKey: "lastUsedMicrophoneDeviceID")
         if String(currentDeviceID) != lastDeviceID {
             if let deviceName = deviceManager.availableDevices.first(where: { $0.id == currentDeviceID })?.name {
@@ -147,26 +142,16 @@ class Recorder: NSObject, ObservableObject {
             // Offload hardware start to avoid shortcut lag.
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 audioSetupQueue.async {
-                    RecordingPerformanceDiagnostics.shared.mark("recorder.hardware_queue.begin")
                     do {
                         try coreAudioRecorder.startRecording(toOutputFile: url, deviceID: deviceID)
-                        RecordingPerformanceDiagnostics.shared.mark("recorder.hardware_queue.end")
                         continuation.resume()
                     } catch {
-                        RecordingPerformanceDiagnostics.shared.mark(
-                            "recorder.hardware_queue.failed",
-                            details: "error=\(error.localizedDescription)"
-                        )
                         continuation.resume(throwing: error)
                     }
                 }
             }
 
             resetAudioMeter()
-            RecordingPerformanceDiagnostics.shared.mark(
-                "recorder.meter_ready",
-                details: "source=display_timeline"
-            )
         } catch {
             logger.error(
                 "Failed to start recording deviceID=\(deviceID, privacy: .public) file=\(url.lastPathComponent, privacy: .public) error=\(error, privacy: .public)"
@@ -177,7 +162,6 @@ class Recorder: NSObject, ObservableObject {
     }
 
     func stopRecording() async {
-        RecordingPerformanceDiagnostics.shared.mark("recorder.stop.entered")
         audioMuteTask?.cancel()
         audioMuteTask = nil
         mediaPauseTask?.cancel()
@@ -185,16 +169,12 @@ class Recorder: NSObject, ObservableObject {
         // Capture current recorder to stop it on the serial hardware queue.
         let currentRecorder = self.recorder
 
-        RecordingPerformanceDiagnostics.shared.mark("recorder.stop.hardware_queue.scheduled")
         await withCheckedContinuation { continuation in
             audioSetupQueue.async {
-                RecordingPerformanceDiagnostics.shared.mark("recorder.stop.hardware_queue.begin")
                 currentRecorder?.stopRecording()
-                RecordingPerformanceDiagnostics.shared.mark("recorder.stop.hardware_queue.end")
                 continuation.resume()
             }
         }
-        RecordingPerformanceDiagnostics.shared.mark("recorder.stop.main_actor_resumed")
         onAudioChunk = nil
 
         resetAudioMeter()
@@ -205,7 +185,6 @@ class Recorder: NSObject, ObservableObject {
             await playbackController.resumeMedia()
         }
         deviceManager.isRecordingActive = false
-        RecordingPerformanceDiagnostics.shared.mark("recorder.stop.completed")
     }
 
     private func muteSystemAudio() {

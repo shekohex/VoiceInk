@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import LaunchAtLogin
 import SwiftData
 import UniformTypeIdentifiers
 
@@ -168,7 +167,7 @@ class ImportExportService {
             secondaryRecordingShortcutModeRawValue: recordingShortcutManager.secondaryRecordingShortcutMode.rawValue,
             isMiddleClickToggleEnabled: recordingShortcutManager.isMiddleClickToggleEnabled,
             middleClickActivationDelay: recordingShortcutManager.middleClickActivationDelay,
-            launchAtLoginEnabled: LaunchAtLogin.isEnabled,
+            launchAtLoginEnabled: LaunchAtLoginManager.shared.isEnabled,
             isMenuBarOnly: menuBarManager.isMenuBarOnly,
             recorderType: recorderUIManager.recorderPanelStyle.rawValue,
             appAppearancePreference: AppAppearancePreference.stored.rawValue,

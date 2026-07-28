@@ -99,10 +99,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
                 voiceInkRefinePreparationTask?.cancel()
                 voiceInkRefinePreparationTask = nil
             }
-            RecordingPerformanceDiagnostics.shared.mark(
-                "engine.state_changed",
-                details: "from=\(String(describing: oldValue)) to=\(String(describing: recordingState))"
-            )
         }
     }
     @Published var shouldCancelRecording = false
@@ -192,29 +188,21 @@ class VoiceInkEngine: NSObject, ObservableObject {
     // MARK: - Toggle Record
 
     func toggleRecord(modeId: UUID? = nil, isAssistantFollowUp: Bool = false) async {
-        RecordingPerformanceDiagnostics.shared.mark(
-            "engine.toggle_entered",
-            details: "state=\(String(describing: recordingState))"
-        )
         if recordingState == .starting {
             await cancelRecording()
             return
         }
 
         if recordingState == .recording {
-            RecordingPerformanceDiagnostics.shared.mark("engine.stop_requested")
             activePipelineUseCase = activeRecordingUseCase
             activeRecordingUseCase = .newSession
             activeRecordingStartID = nil
             partialTranscript = ""
             recordingState = .transcribing
-            RecordingPerformanceDiagnostics.shared.mark("engine.recorder_stop.begin")
             await recorder.stopRecording()
-            RecordingPerformanceDiagnostics.shared.mark("engine.recorder_stop.end")
 
             if let recordedFile {
                 if !shouldCancelRecording {
-                    RecordingPerformanceDiagnostics.shared.mark("engine.transcription_record.create.begin")
                     let transcription = makeRecordingTranscription(
                         for: recordedFile,
                         text: "",
@@ -224,15 +212,12 @@ class VoiceInkEngine: NSObject, ObservableObject {
                     modelContext.insert(transcription)
                     try? modelContext.save()
                     NotificationCenter.default.post(name: .transcriptionCreated, object: transcription)
-                    RecordingPerformanceDiagnostics.shared.mark("engine.transcription_record.create.end")
 
-                    RecordingPerformanceDiagnostics.shared.mark("engine.pipeline.begin")
                     await runPipeline(
                         on: transcription,
                         audioURL: recordedFile,
                         contextStore: activeRecordingContextStore
                     )
-                    RecordingPerformanceDiagnostics.shared.mark("engine.pipeline.end")
                 } else {
                     await finishActiveRecorderCancellation()
                 }
@@ -259,24 +244,14 @@ class VoiceInkEngine: NSObject, ObservableObject {
             }
 
             requestRecordPermission { [self] granted in
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "permission.resolved",
-                    details: "granted=\(granted)"
-                )
                 if granted {
-                    RecordingPerformanceDiagnostics.shared.mark("preflight.task.scheduled")
                     Task { @MainActor [self] in
-                        RecordingPerformanceDiagnostics.shared.mark("preflight.task.started")
-                        RecordingPerformanceDiagnostics.shared.mark("preflight.begin")
                         guard await self.passesRecordingPreflight() else {
-                            RecordingPerformanceDiagnostics.shared.finish("preflight.failed")
                             return
                         }
-                        RecordingPerformanceDiagnostics.shared.mark("preflight.end")
 
                         let startID = UUID()
                         self.activeRecordingStartID = startID
-                        RecordingPerformanceDiagnostics.shared.mark("active_mode.apply_scheduled")
                         let activeModeTask = ActiveWindowService.shared.beginApplyingConfiguration(modeId: modeId) {
                             [weak self] in
                             guard let self else { return false }
@@ -293,9 +268,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
                             self.recordingState = .starting
 
-                            RecordingPerformanceDiagnostics.shared.mark("recorder.start.begin")
                             try await self.recorder.startRecording(toOutputFile: permanentURL)
-                            RecordingPerformanceDiagnostics.shared.mark("recorder.start.end")
 
                             guard self.activeRecordingStartID == startID,
                                 self.recorderUIManager?.isRecorderPanelVisible ?? false,
@@ -316,9 +289,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
                             self.recordingState = .recording
 
-                            RecordingPerformanceDiagnostics.shared.mark("active_mode.apply_wait.begin")
                             await activeModeTask.value
-                            RecordingPerformanceDiagnostics.shared.mark("active_mode.apply_wait.end")
 
                             guard self.recordingState == .recording,
                                 self.activeRecordingStartID == startID,
@@ -328,9 +299,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
                             }
 
                             self.scheduleVoiceInkRefinePreparation(for: startID)
-                            RecordingPerformanceDiagnostics.shared.mark("context_capture.schedule.begin")
                             self.startRecordingContextCapture()
-                            RecordingPerformanceDiagnostics.shared.mark("context_capture.schedule.end")
 
                             let modelResolution = ModeRuntimeResolver.transcriptionModelResolution(
                                 transcriptionModelManager: self.transcriptionModelManager
@@ -354,10 +323,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 self.activeRecordingStartID = nil
                                 self.clearActiveRecordingContext()
                                 await self.cleanupResources()
-                                RecordingPerformanceDiagnostics.shared.finish(
-                                    "recording.configuration_failed",
-                                    details: "reason=transcription_model_unavailable"
-                                )
                                 await self.recorderUIManager?.dismissRecorderPanel()
                                 return
                             }
@@ -379,16 +344,8 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 )
                                 self.currentSession = session
                                 self.currentSessionTranscriptionConfiguration = transcriptionConfiguration
-                                RecordingPerformanceDiagnostics.shared.mark(
-                                    "transcription_session.prepare.begin",
-                                    details: "model=\(transcriptionConfiguration.model.displayName)"
-                                )
                                 let realCallback = try await session.prepare(
                                     configuration: transcriptionConfiguration
-                                )
-                                RecordingPerformanceDiagnostics.shared.mark(
-                                    "transcription_session.prepare.end",
-                                    details: "streaming=\(realCallback != nil)"
                                 )
 
                                 if let realCallback {
@@ -439,10 +396,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
                         } catch {
                             activeModeTask.cancel()
-                            RecordingPerformanceDiagnostics.shared.finish(
-                                "recording.start_failed",
-                                details: "error=\(error.localizedDescription)"
-                            )
                             self.logger.error("Recording failed to start: \(error, privacy: .public)")
                             await self.recorder.stopRecording()
                             self.cancelCurrentSession()
@@ -460,7 +413,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
                         }
                     }
                 } else {
-                    RecordingPerformanceDiagnostics.shared.finish("permission.denied")
                     logger.error("Recording permission denied")
                 }
             }
@@ -815,18 +767,11 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
     private func scheduleVoiceInkRefinePreparation(for recordingStartID: UUID) {
         voiceInkRefinePreparationTask?.cancel()
-        RecordingPerformanceDiagnostics.shared.mark(
-            "refine.background_prepare.delayed",
-            details: "delay_ms=450"
-        )
 
         voiceInkRefinePreparationTask = Task { @MainActor [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(450))
             } catch {
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "refine.background_prepare.delay_cancelled"
-                )
                 return
             }
 
@@ -839,9 +784,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
                 let enhancementService = self.enhancementService,
                 let aiService = enhancementService.getAIService()
             else {
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "refine.background_prepare.delay_expired_without_recording"
-                )
                 return
             }
 
@@ -850,15 +792,9 @@ class VoiceInkEngine: NSObject, ObservableObject {
                 aiService: aiService
             )
             guard configuration.isEnabled, configuration.provider == .voiceInkRefine else {
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "refine.background_prepare.not_required"
-                )
                 return
             }
 
-            RecordingPerformanceDiagnostics.shared.mark(
-                "refine.background_prepare.settled_schedule"
-            )
             aiService.voiceInkRefineService.prepareForRecording()
         }
     }
@@ -884,29 +820,19 @@ class VoiceInkEngine: NSObject, ObservableObject {
     }
 
     private func finishRecorderSession() async {
-        RecordingPerformanceDiagnostics.shared.mark("session.contexts_clear.begin")
         enhancementService?.clearCapturedContexts()
-        RecordingPerformanceDiagnostics.shared.mark("session.contexts_clear.end")
-        RecordingPerformanceDiagnostics.shared.mark("session.refine_unused_prepare_cleanup.begin")
         await enhancementService?
             .getAIService()?
             .voiceInkRefineService
             .unloadPreparedModelIfNeeded()
-        RecordingPerformanceDiagnostics.shared.mark("session.refine_unused_prepare_cleanup.end")
-        RecordingPerformanceDiagnostics.shared.finish(
-            "recording.session_finished",
-            lingerNanoseconds: 1_000_000_000
-        )
     }
 
     func cleanupResources() async {
         logger.notice("cleanupResources: releasing model resources")
-        RecordingPerformanceDiagnostics.shared.mark("session.transcription_cleanup.begin")
         activeRecordingStartID = nil
         activeRecordingUseCase = .newSession
         await whisperModelManager.cleanupResources()
         await serviceRegistry.cleanup()
-        RecordingPerformanceDiagnostics.shared.mark("session.transcription_cleanup.end")
         logger.notice("cleanupResources: completed")
     }
 

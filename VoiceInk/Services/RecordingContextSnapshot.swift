@@ -36,39 +36,20 @@ enum RecordingContextCaptureService {
     static func startCapture(into store: RecordingContextSnapshotStore) -> [Task<Void, Never>] {
         [
             Task { @MainActor in
-                RecordingPerformanceDiagnostics.shared.mark("context.clipboard.begin")
-                let clipboardText = NSPasteboard.general.string(forType: .string)
-                store.updateClipboardText(clipboardText)
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "context.clipboard.end",
-                    details: "chars=\(clipboardText?.count ?? 0)"
-                )
+                store.updateClipboardText(NSPasteboard.general.string(forType: .string))
             },
             Task { @MainActor in
                 guard !Task.isCancelled else { return }
-                RecordingPerformanceDiagnostics.shared.mark("context.selected_text.begin")
                 let selectedText = await SelectedTextService.fetchSelectedText()
                 guard !Task.isCancelled else { return }
                 store.updateSelectedText(selectedText)
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "context.selected_text.end",
-                    details: "chars=\(selectedText?.count ?? 0)"
-                )
             },
             Task { @MainActor in
-                guard CGPreflightScreenCaptureAccess(), !Task.isCancelled else {
-                    RecordingPerformanceDiagnostics.shared.mark("context.screen_capture.skipped")
-                    return
-                }
-                RecordingPerformanceDiagnostics.shared.mark("context.screen_capture.begin")
+                guard CGPreflightScreenCaptureAccess(), !Task.isCancelled else { return }
                 let screenCaptureService = ScreenCaptureService()
                 let screenText = await screenCaptureService.captureAndExtractText()
                 guard !Task.isCancelled else { return }
                 store.updateScreenText(screenText)
-                RecordingPerformanceDiagnostics.shared.mark(
-                    "context.screen_capture.end",
-                    details: "chars=\(screenText?.count ?? 0)"
-                )
             },
         ]
     }

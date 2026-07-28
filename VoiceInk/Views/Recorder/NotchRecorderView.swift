@@ -123,12 +123,6 @@ struct NotchRecorderView<S: RecorderStateProvider & ObservableObject>: View {
             pill.position(x: geo.size.width / 2, y: pillHeight / 2)
         }
         .animation(pillAnimation, value: displayState)
-        .onChange(of: stateProvider.recordingState) { _, newState in
-            RecordingPerformanceDiagnostics.shared.mark(
-                "ui.state_observed",
-                details: "view=notch state=\(String(describing: newState))"
-            )
-        }
     }
 
     // MARK: - Pill
