@@ -39,6 +39,7 @@ actor VoiceInkRefineInferenceEngine {
     #endif
 
     func prepare(
+        requestID _: UUID,
         modelDirectory: URL,
         systemPrompt: String
     ) async throws {
@@ -85,12 +86,14 @@ actor VoiceInkRefineInferenceEngine {
     }
 
     func enhance(
+        requestID: UUID,
         transcript: String,
         modelDirectory: URL,
         systemPrompt: String
     ) async throws -> String {
         #if arch(arm64)
             try await prepare(
+                requestID: requestID,
                 modelDirectory: modelDirectory,
                 systemPrompt: systemPrompt
             )

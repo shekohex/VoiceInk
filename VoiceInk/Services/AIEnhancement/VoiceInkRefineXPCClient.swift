@@ -31,6 +31,11 @@ private final class VoiceInkRefineXPCCancellationHandle: @unchecked Sendable {
     }
 }
 
+private enum VoiceInkRefineXPCOperation {
+    case prepare
+    case enhance
+}
+
 actor VoiceInkRefineXPCClient {
     private static let warmGracePeriod: Duration = .seconds(8)
 
@@ -97,7 +102,7 @@ actor VoiceInkRefineXPCClient {
             }
         } catch {
             invalidateIfCurrent(activeConnection)
-            throw error
+            throw localizedError(error, operation: .prepare)
         }
     }
 
@@ -181,7 +186,7 @@ actor VoiceInkRefineXPCClient {
             return response.output
         } catch {
             invalidateIfCurrent(activeConnection)
-            throw error
+            throw localizedError(error, operation: .enhance)
         }
     }
 
@@ -339,6 +344,39 @@ actor VoiceInkRefineXPCClient {
             cancelIdleShutdown()
         }
         activeConnection.invalidate()
+    }
+
+    private func localizedError(
+        _ error: Error,
+        operation: VoiceInkRefineXPCOperation
+    ) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == voiceInkRefineXPCErrorDomain,
+            let code = VoiceInkRefineXPCErrorCode(rawValue: nsError.code)
+        else {
+            return error
+        }
+
+        let description: String
+        switch code {
+        case .invalidRequest:
+            description = String(localized: "VoiceInk Refine received an invalid request.")
+        case .inferenceFailed:
+            switch operation {
+            case .prepare:
+                description = String(localized: "VoiceInk Refine could not prepare the model.")
+            case .enhance:
+                description = String(
+                    localized: "VoiceInk Refine could not complete the enhancement."
+                )
+            }
+        case .invalidResponse:
+            description = String(localized: "VoiceInk Refine returned an invalid response.")
+        case .connectionFailed:
+            description = String(localized: "Could not communicate with VoiceInk Refine.")
+        }
+
+        return makeVoiceInkRefineXPCError(code, description: description)
     }
 
     private func connectionInterrupted(

@@ -33,7 +33,12 @@ final class VoiceInkRefineService: ObservableObject {
     static let repositoryID = "beingpax/voiceink-refine-v1"
     static let pinnedRevision = "5bd73a600d467da5c37bfc7c76f036dddbf280f5"
     static let minimumMemoryBytes: UInt64 = 16 * 1_024 * 1_024 * 1_024
-    static let downloadSizeDescription = "1.75 GB"
+    static var downloadSizeDescription: String {
+        ByteCountFormatter.string(
+            fromByteCount: VoiceInkRefineModelDownloader.totalBytes,
+            countStyle: .file
+        )
+    }
 
     @Published private(set) var isDownloaded = false
     @Published private(set) var isDownloading = false
@@ -48,10 +53,6 @@ final class VoiceInkRefineService: ObservableObject {
 
     var isAvailableInModes: Bool {
         availability == .available && isDownloaded
-    }
-
-    var shouldShowInCatalog: Bool {
-        availability != .insufficientMemory
     }
 
     var unavailableDescription: String? {

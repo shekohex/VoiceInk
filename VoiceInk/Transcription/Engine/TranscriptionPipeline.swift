@@ -241,9 +241,11 @@ class TranscriptionPipeline {
         }
 
         func saveTranscriptionAndPostCompletion() {
+            var didInsertSessionMetric = false
+
             if transcription.transcriptionStatus == TranscriptionStatus.completed.rawValue {
                 do {
-                    _ = try SessionMetricRecorder.recordRecorderSession(
+                    didInsertSessionMetric = try SessionMetricRecorder.recordRecorderSession(
                         transcription: transcription,
                         model: model,
                         in: modelContext
