@@ -4345,18 +4345,18 @@
         }
       }
     },
-    "Cleans up the raw transcript locally. Prompts and context are not used." : {
+    "Cleans up the raw transcript locally." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bereinigt das Rohtranskript lokal. Prompts und Kontext werden nicht verwendet."
+            "value" : "Bereinigt das Rohtranskript lokal."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在本地清理原始转录文本。不使用提示词和上下文。"
+            "value" : "在本地清理原始转录文本。"
           }
         }
       }

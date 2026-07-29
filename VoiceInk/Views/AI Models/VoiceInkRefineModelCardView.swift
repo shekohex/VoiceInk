@@ -18,34 +18,18 @@ struct VoiceInkRefineModelCardView: View {
             actionSection
         }
         .padding(16)
-        .background(
-            AppMaterialCardBackground()
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.card)
-                        .stroke(AppTheme.Accent.border, lineWidth: 1.5)
-                )
-        )
+        .background(AppMaterialCardBackground())
     }
 
     private var headerSection: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(VoiceInkRefineService.modelName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(.labelColor))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(.labelColor))
 
-            Text("New")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(AppTheme.Text.primary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .fill(AppTheme.Accent.fillStrong)
-                        .overlay(
-                            Capsule()
-                                .stroke(AppTheme.Accent.border, lineWidth: 1)
-                        )
-                )
+            Text("Recommended")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppTheme.Accent.strong)
 
             Spacer()
         }
@@ -68,7 +52,7 @@ struct VoiceInkRefineModelCardView: View {
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Cleans up the raw transcript locally. Prompts and context are not used.")
+            Text("Cleans up the raw transcript locally.")
                 .font(.system(size: 11))
                 .foregroundColor(Color(.secondaryLabelColor))
                 .lineLimit(2)

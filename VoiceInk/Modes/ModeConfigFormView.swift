@@ -404,11 +404,7 @@ struct ModeConfigFormView: View {
 
                 if let provider = configuredSelectedAIProvider {
                     aiModelPicker(for: provider)
-                    if provider == .voiceInkRefine {
-                        Text("Cleans up the raw transcript locally. Prompts and context are not used.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
+                    if provider != .voiceInkRefine {
                         promptPicker
                         contextAwarenessRow
                     }
