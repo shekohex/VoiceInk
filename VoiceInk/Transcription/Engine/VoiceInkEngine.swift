@@ -97,7 +97,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
             guard oldValue != recordingState else { return }
             if oldValue == .recording, recordingState != .recording {
                 voiceInkRefinePreparationTask?.cancel()
-                voiceInkRefinePreparationTask = nil
             }
         }
     }
@@ -776,7 +775,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
             }
 
             guard let self else { return }
-            defer { self.voiceInkRefinePreparationTask = nil }
 
             guard self.recordingState == .recording,
                 self.activeRecordingStartID == recordingStartID,
@@ -795,7 +793,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
                 return
             }
 
-            aiService.voiceInkRefineService.prepareForRecording()
+            await aiService.voiceInkRefineService.prepareForRecording()
         }
     }
 
@@ -820,6 +818,11 @@ class VoiceInkEngine: NSObject, ObservableObject {
     }
 
     private func finishRecorderSession() async {
+        let preparationTask = voiceInkRefinePreparationTask
+        voiceInkRefinePreparationTask = nil
+        preparationTask?.cancel()
+        await preparationTask?.value
+
         enhancementService?.clearCapturedContexts()
         await enhancementService?
             .getAIService()?

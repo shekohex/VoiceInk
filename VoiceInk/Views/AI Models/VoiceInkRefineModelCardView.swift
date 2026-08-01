@@ -22,14 +22,24 @@ struct VoiceInkRefineModelCardView: View {
     }
 
     private var headerSection: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(AppTheme.Accent.fillSubtle)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(AppTheme.Accent.border.opacity(0.7), lineWidth: 1)
+                    }
+
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.Accent.strong)
+            }
+            .frame(width: 24, height: 24)
+
             Text(VoiceInkRefineService.modelName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color(.labelColor))
-
-            Text("Recommended")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppTheme.Accent.strong)
 
             Spacer()
         }
@@ -52,7 +62,7 @@ struct VoiceInkRefineModelCardView: View {
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Cleans up the raw transcript locally.")
+            Text("Cleans up raw transcripts. Processing stays on your Mac.")
                 .font(.system(size: 11))
                 .foregroundColor(Color(.secondaryLabelColor))
                 .lineLimit(2)

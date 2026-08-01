@@ -153,28 +153,24 @@ final class VoiceInkRefineService: ObservableObject {
     }
 
     func unloadPreparedModelIfNeeded() async {
-        await inferenceClient.shutdownPreparedModelIfNeeded()
+        await inferenceClient.shutdown()
     }
 
-    func prepareForRecording() {
+    func prepareForRecording() async {
         guard availability == .available, isDownloaded, let snapshotURL else {
             return
         }
 
-        let inferenceClient = inferenceClient
-        let logger = logger
-        Task.detached(priority: .utility) {
-            do {
-                try await inferenceClient.prepare(
-                    modelDirectory: snapshotURL,
-                    systemPrompt: Self.systemPrompt
-                )
-            } catch is CancellationError {
-            } catch {
-                logger.error(
-                    "Background model preparation failed: \(error.localizedDescription, privacy: .public)"
-                )
-            }
+        do {
+            try await inferenceClient.prepare(
+                modelDirectory: snapshotURL,
+                systemPrompt: Self.systemPrompt
+            )
+        } catch is CancellationError {
+        } catch {
+            logger.error(
+                "Background model preparation failed: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
