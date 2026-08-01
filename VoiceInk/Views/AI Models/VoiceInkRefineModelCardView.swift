@@ -125,6 +125,17 @@ struct VoiceInkRefineModelCardView: View {
                         Button(role: .destructive, action: deleteAction) {
                             Label("Delete Model", systemImage: "trash")
                         }
+
+                        Button {
+                            if let modelURL = service.downloadedModelURL {
+                                NSWorkspace.shared.selectFile(
+                                    modelURL.path,
+                                    inFileViewerRootedAtPath: ""
+                                )
+                            }
+                        } label: {
+                            Label("Show in Finder", systemImage: "folder")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 14))

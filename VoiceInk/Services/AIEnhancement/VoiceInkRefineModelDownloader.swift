@@ -50,39 +50,34 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
 
     static let files: [ModelFile] = [
         ModelFile(path: ".gitattributes", size: 1_570),
+        ModelFile(path: "LICENSE-QWEN-APACHE-2.0.txt", size: 11_544),
         ModelFile(path: "LICENSE.md", size: 275),
-        ModelFile(path: "README.md", size: 1_087),
-        ModelFile(path: "chat_template.jinja", size: 7_650),
-        ModelFile(path: "config.json", size: 3_113),
+        ModelFile(path: "README.md", size: 965),
+        ModelFile(path: "THIRD_PARTY_NOTICES.md", size: 479),
+        ModelFile(path: "chat_template.jinja", size: 6_412),
+        ModelFile(path: "config.json", size: 2_479),
         ModelFile(
             path: "model.safetensors",
-            size: 1_722_271_785,
-            sha256: "e501232c737f47a2ac2b033171ec909be8295de7928bbd4510021dbb3862153c"
+            size: 1_059_404_951,
+            sha256: "3cdfe2f506f71f2c5d5af23aa8fe3572989d2f364a7317322220621a86aaf5f6"
         ),
-        ModelFile(path: "model.safetensors.index.json", size: 81_722),
-        ModelFile(path: "preprocessor_config.json", size: 390),
-        ModelFile(path: "processor_config.json", size: 991),
+        ModelFile(path: "model.safetensors.index.json", size: 60_786),
         ModelFile(
             path: "tokenizer.json",
             size: 19_989_325,
             sha256: "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
         ),
-        ModelFile(path: "tokenizer_config.json", size: 1_165),
-        ModelFile(path: "video_preprocessor_config.json", size: 385),
-        ModelFile(path: "vocab.json", size: 6_722_759),
+        ModelFile(path: "tokenizer_config.json", size: 582),
     ]
 
     static let totalBytes = files.reduce(Int64(0)) { $0 + $1.size }
 
     static func snapshotDirectory(
         in modelRootDirectory: URL,
-        repositoryID: String,
-        revision: String
+        repositoryID _: String,
+        revision _: String
     ) -> URL {
         modelRootDirectory
-            .appendingPathComponent("models--\(repositoryID.replacingOccurrences(of: "/", with: "--"))")
-            .appendingPathComponent("snapshots")
-            .appendingPathComponent(revision)
     }
 
     static func isSnapshotComplete(at snapshotDirectory: URL) -> Bool {
@@ -107,8 +102,7 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             revision: revision
         )
         partialsDirectory = modelRootDirectory
-            .appendingPathComponent(".voiceink-downloads")
-            .appendingPathComponent(revision)
+            .appendingPathComponent(".voiceink-download-\(revision)")
     }
 
     var progress: VoiceInkRefineDownloadProgress {

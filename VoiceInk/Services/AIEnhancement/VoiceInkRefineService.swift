@@ -30,8 +30,8 @@ final class VoiceInkRefineService: ObservableObject {
     static let systemPrompt = """
         Transform raw ASR input into polished text. Preserve the original meaning and tone. Handle punctuation, capitalization, and spoken formatting cues properly. Remove fillers, repetitions, false starts, and discarded self-corrections. Output only the final text.
         """
-    static let repositoryID = "beingpax/voiceink-refine-v1"
-    static let pinnedRevision = "5bd73a600d467da5c37bfc7c76f036dddbf280f5"
+    static let repositoryID = "beingpax/VoiceInk-Refine-V1"
+    static let pinnedRevision = "ad665418d3850e379e29236e66be3ddc0ac0bf04"
     static let minimumMemoryBytes: UInt64 = 16 * 1_024 * 1_024 * 1_024
     static var downloadSizeDescription: String {
         ByteCountFormatter.string(
@@ -52,6 +52,10 @@ final class VoiceInkRefineService: ObservableObject {
 
     var isAvailableInModes: Bool {
         availability == .available && isDownloaded
+    }
+
+    var downloadedModelURL: URL? {
+        isDownloaded ? snapshotURL : nil
     }
 
     var unavailableDescription: String? {
