@@ -37,6 +37,8 @@ private enum VoiceInkRefineXPCOperation {
 }
 
 actor VoiceInkRefineXPCClient {
+    private static let warmGracePeriod: Duration = .seconds(10)
+
     private let logger = Logger(
         subsystem: "com.prakashjoshipax.voiceink",
         category: "VoiceInkRefineXPCClient"
@@ -46,11 +48,15 @@ actor VoiceInkRefineXPCClient {
     private var connectionID: UUID?
     private var operationIsActive = false
     private var operationWaiters: [CheckedContinuation<Void, Never>] = []
+    private var idleShutdownTask: Task<Void, Never>?
+    private var idleShutdownToken: UUID?
 
     func prepare(modelDirectory: URL, systemPrompt: String) async throws {
+        cancelIdleShutdown()
         await acquireOperation()
         defer { releaseOperation() }
 
+        cancelIdleShutdown()
         try Task.checkCancellation()
 
         let request = VoiceInkRefinePrepareRequest(
@@ -105,9 +111,11 @@ actor VoiceInkRefineXPCClient {
         modelDirectory: URL,
         systemPrompt: String
     ) async throws -> String {
+        cancelIdleShutdown()
         await acquireOperation()
         defer { releaseOperation() }
 
+        cancelIdleShutdown()
         try Task.checkCancellation()
 
         let request = VoiceInkRefineEnhanceRequest(
@@ -174,7 +182,7 @@ actor VoiceInkRefineXPCClient {
                 )
             }
 
-            await shutdownCurrentConnection()
+            scheduleIdleShutdown(for: activeConnection)
             return response.output
         } catch {
             invalidateIfCurrent(activeConnection)
@@ -183,8 +191,19 @@ actor VoiceInkRefineXPCClient {
     }
 
     func shutdown() async {
+        cancelIdleShutdown()
         await acquireOperation()
         defer { releaseOperation() }
+
+        cancelIdleShutdown()
+        await shutdownCurrentConnection()
+    }
+
+    func shutdownPreparedModelIfNeeded() async {
+        await acquireOperation()
+        defer { releaseOperation() }
+
+        guard idleShutdownTask == nil else { return }
 
         await shutdownCurrentConnection()
     }
@@ -224,6 +243,55 @@ actor VoiceInkRefineXPCClient {
         self.connection = connection
         connectionID = identifier
         return connection
+    }
+
+    private func scheduleIdleShutdown(for activeConnection: NSXPCConnection) {
+        guard connection === activeConnection else { return }
+
+        cancelIdleShutdown()
+        let token = UUID()
+        idleShutdownToken = token
+
+        idleShutdownTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.warmGracePeriod)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.idleShutdownTimerFired(
+                token: token,
+                expectedConnection: activeConnection
+            )
+        }
+    }
+
+    private func idleShutdownTimerFired(
+        token: UUID,
+        expectedConnection: NSXPCConnection
+    ) async {
+        guard idleShutdownToken == token else { return }
+
+        await acquireOperation()
+        defer { releaseOperation() }
+
+        guard idleShutdownToken == token,
+            connection === expectedConnection
+        else {
+            return
+        }
+
+        idleShutdownTask = nil
+        idleShutdownToken = nil
+        await shutdownCurrentConnection()
+    }
+
+    private func cancelIdleShutdown() {
+        guard idleShutdownTask != nil || idleShutdownToken != nil else { return }
+
+        idleShutdownTask?.cancel()
+        idleShutdownTask = nil
+        idleShutdownToken = nil
     }
 
     private func acquireOperation() async {
@@ -273,6 +341,7 @@ actor VoiceInkRefineXPCClient {
         if connection === activeConnection {
             connection = nil
             connectionID = nil
+            cancelIdleShutdown()
         }
         activeConnection.invalidate()
     }
@@ -319,6 +388,7 @@ actor VoiceInkRefineXPCClient {
         }
         connection = nil
         connectionID = nil
+        cancelIdleShutdown()
         logger.error(
             "VoiceInk Refine XPC connection interrupted id=\(identifier.uuidString, privacy: .public)"
         )
@@ -333,5 +403,6 @@ actor VoiceInkRefineXPCClient {
         }
         connection = nil
         connectionID = nil
+        cancelIdleShutdown()
     }
 }

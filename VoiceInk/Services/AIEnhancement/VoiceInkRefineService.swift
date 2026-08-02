@@ -153,7 +153,7 @@ final class VoiceInkRefineService: ObservableObject {
     }
 
     func unloadPreparedModelIfNeeded() async {
-        await inferenceClient.shutdown()
+        await inferenceClient.shutdownPreparedModelIfNeeded()
     }
 
     func prepareForRecording() async {
