@@ -156,6 +156,10 @@ final class VoiceInkRefineService: ObservableObject {
         await inferenceClient.shutdownPreparedModelIfNeeded()
     }
 
+    func keepPreparedModelWarmForRecording() async {
+        await inferenceClient.keepPreparedModelWarmForRecording()
+    }
+
     func prepareForRecording() async {
         guard availability == .available, isDownloaded, let snapshotURL else {
             return

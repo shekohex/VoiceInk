@@ -92,14 +92,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
         }
     }
 
-    @Published var recordingState: RecordingState = .idle {
-        didSet {
-            guard oldValue != recordingState else { return }
-            if oldValue == .recording, recordingState != .recording {
-                voiceInkRefinePreparationTask?.cancel()
-            }
-        }
-    }
+    @Published var recordingState: RecordingState = .idle
     @Published var shouldCancelRecording = false
     @Published var partialTranscript: String = ""
     var currentSession: TranscriptionSession?
@@ -768,19 +761,39 @@ class VoiceInkEngine: NSObject, ObservableObject {
         voiceInkRefinePreparationTask?.cancel()
 
         voiceInkRefinePreparationTask = Task { @MainActor [weak self] in
+            guard let self,
+                self.recordingState == .recording,
+                self.activeRecordingStartID == recordingStartID,
+                !self.shouldCancelRecording,
+                let enhancementService = self.enhancementService,
+                let aiService = enhancementService.getAIService()
+            else {
+                return
+            }
+
+            let initialConfiguration = ModeRuntimeResolver.currentEnhancementConfiguration(
+                enhancementService: enhancementService,
+                aiService: aiService
+            )
+            guard initialConfiguration.isEnabled,
+                initialConfiguration.provider == .voiceInkRefine
+            else {
+                return
+            }
+
+            // Preserve an already-warm XPC model immediately, while retaining the
+            // debounce below before any new model preparation begins.
+            await aiService.voiceInkRefineService.keepPreparedModelWarmForRecording()
+
             do {
                 try await Task.sleep(for: .milliseconds(450))
             } catch {
                 return
             }
 
-            guard let self else { return }
-
             guard self.recordingState == .recording,
                 self.activeRecordingStartID == recordingStartID,
-                !self.shouldCancelRecording,
-                let enhancementService = self.enhancementService,
-                let aiService = enhancementService.getAIService()
+                !self.shouldCancelRecording
             else {
                 return
             }

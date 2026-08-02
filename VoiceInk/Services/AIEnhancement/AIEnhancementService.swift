@@ -204,10 +204,14 @@ class AIEnhancementService: ObservableObject {
         if provider == .voiceInkRefine {
             do {
                 let result = try await aiService.enhanceWithVoiceInkRefine(transcript: text)
+                let filteredResult = AIEnhancementOutputFilter.filter(
+                    result.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+                guard !filteredResult.isEmpty else {
+                    throw EnhancementError.enhancementFailed
+                }
                 return (
-                    AIEnhancementOutputFilter.filter(
-                        result.trimmingCharacters(in: .whitespacesAndNewlines)
-                    ),
+                    filteredResult,
                     nil,
                     text
                 )

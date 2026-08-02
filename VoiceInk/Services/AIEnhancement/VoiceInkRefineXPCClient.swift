@@ -101,6 +101,7 @@ actor VoiceInkRefineXPCClient {
                 cancellationHandle.cancel()
             }
         } catch {
+            logFailure(error, operation: .prepare)
             invalidateIfCurrent(activeConnection)
             throw localizedError(error, operation: .prepare)
         }
@@ -185,6 +186,7 @@ actor VoiceInkRefineXPCClient {
             scheduleIdleShutdown(for: activeConnection)
             return response.output
         } catch {
+            logFailure(error, operation: .enhance)
             invalidateIfCurrent(activeConnection)
             throw localizedError(error, operation: .enhance)
         }
@@ -206,6 +208,10 @@ actor VoiceInkRefineXPCClient {
         guard idleShutdownTask == nil else { return }
 
         await shutdownCurrentConnection()
+    }
+
+    func keepPreparedModelWarmForRecording() {
+        cancelIdleShutdown()
     }
 
     private func shutdownCurrentConnection() async {
@@ -377,6 +383,23 @@ actor VoiceInkRefineXPCClient {
         }
 
         return makeVoiceInkRefineXPCError(code, description: description)
+    }
+
+    private func logFailure(
+        _ error: Error,
+        operation: VoiceInkRefineXPCOperation
+    ) {
+        let nsError = error as NSError
+        let operationName: String
+        switch operation {
+        case .prepare:
+            operationName = "prepare"
+        case .enhance:
+            operationName = "enhance"
+        }
+        logger.error(
+            "VoiceInk Refine XPC \(operationName, privacy: .public) failed domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)"
+        )
     }
 
     private func connectionInterrupted(

@@ -11,6 +11,7 @@ import Foundation
 enum VoiceInkRefineInferenceError: LocalizedError {
     case unavailable
     case modelNotLoaded
+    case emptyOutput
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum VoiceInkRefineInferenceError: LocalizedError {
             return "VoiceInk Refine requires Apple silicon."
         case .modelNotLoaded:
             return "VoiceInk Refine could not load the selected model."
+        case .emptyOutput:
+            return "VoiceInk Refine returned an empty response."
         }
     }
 }
@@ -30,16 +33,15 @@ actor VoiceInkRefineInferenceEngine {
         }
 
         private static let activeCacheLimitBytes = 64 * 1_024 * 1_024
+        private static let maximumGenerationTokens = 8_192
 
         private var modelContainer: MLXLMCommon.ModelContainer?
-        private var systemPrefixCache: [KVCache]?
         private var preparationTask: Task<Void, Error>?
         private var preparationIdentity: PreparationIdentity?
         private var isWarmed = false
     #endif
 
     func prepare(
-        requestID _: UUID,
         modelDirectory: URL,
         systemPrompt: String
     ) async throws {
@@ -78,6 +80,7 @@ actor VoiceInkRefineInferenceEngine {
             } catch {
                 preparationTask = nil
                 preparationIdentity = nil
+                await unload()
                 throw error
             }
         #else
@@ -86,31 +89,30 @@ actor VoiceInkRefineInferenceEngine {
     }
 
     func enhance(
-        requestID: UUID,
         transcript: String,
         modelDirectory: URL,
         systemPrompt: String
     ) async throws -> String {
         #if arch(arm64)
+            guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return transcript
+            }
+
             try await prepare(
-                requestID: requestID,
                 modelDirectory: modelDirectory,
                 systemPrompt: systemPrompt
             )
 
-            guard let modelContainer, let systemPrefixCache else {
+            guard let modelContainer else {
                 throw VoiceInkRefineInferenceError.modelNotLoaded
             }
 
             let wordCount = transcript.split(whereSeparator: \.isWhitespace).count
-            let maximumOutputTokens = min(max(wordCount * 3, 256), 8_192)
-            let session = ChatSession(
-                modelContainer,
-                cache: copy(cache: systemPrefixCache),
-                generateParameters: GenerateParameters(
-                    maxTokens: maximumOutputTokens,
-                    temperature: 0
-                )
+            let maximumOutputTokens = Self.maximumOutputTokens(forWordCount: wordCount)
+            let session = makeSession(
+                using: modelContainer,
+                systemPrompt: systemPrompt,
+                maximumOutputTokens: maximumOutputTokens
             )
 
             var output = ""
@@ -120,7 +122,7 @@ actor VoiceInkRefineInferenceEngine {
                     try Task.checkCancellation()
                     switch event {
                     case .chunk(let text):
-                        output += text
+                        output.append(contentsOf: text)
                     case .info:
                         break
                     case .toolCall:
@@ -131,6 +133,10 @@ actor VoiceInkRefineInferenceEngine {
             } catch {
                 await session.clear()
                 throw error
+            }
+
+            guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw VoiceInkRefineInferenceError.emptyOutput
             }
 
             return output
@@ -150,7 +156,7 @@ actor VoiceInkRefineInferenceEngine {
             activePreparationTask = nil
 
             let hadLoadedResources =
-                hadActivePreparation || modelContainer != nil || systemPrefixCache != nil || isWarmed
+                hadActivePreparation || modelContainer != nil || isWarmed
             preparationTask = nil
             preparationIdentity = nil
 
@@ -159,7 +165,6 @@ actor VoiceInkRefineInferenceEngine {
 
                 Memory.cacheLimit = 0
                 autoreleasepool {
-                    systemPrefixCache = nil
                     modelContainer = nil
                     isWarmed = false
                 }
@@ -180,20 +185,13 @@ actor VoiceInkRefineInferenceEngine {
             systemPrompt: String
         ) async throws {
             let container = try await loadContainerIfNeeded(from: modelDirectory)
-            let prefixCache = try await buildSystemPrefixCacheIfNeeded(
-                using: container,
-                systemPrompt: systemPrompt
-            )
 
             guard !isWarmed else { return }
 
-            let warmupSession = ChatSession(
-                container,
-                cache: copy(cache: prefixCache),
-                generateParameters: GenerateParameters(
-                    maxTokens: 1,
-                    temperature: 0
-                )
+            let warmupSession = makeSession(
+                using: container,
+                systemPrompt: systemPrompt,
+                maximumOutputTokens: 1
             )
             do {
                 _ = try await warmupSession.respond(to: "Speech")
@@ -224,52 +222,28 @@ actor VoiceInkRefineInferenceEngine {
             return loadedContainer
         }
 
-        private func buildSystemPrefixCacheIfNeeded(
+        private func makeSession(
             using container: MLXLMCommon.ModelContainer,
-            systemPrompt: String
-        ) async throws -> [KVCache] {
-            if let systemPrefixCache {
-                return systemPrefixCache
-            }
-
-            let cacheBuilder = ChatSession(
+            systemPrompt: String,
+            maximumOutputTokens: Int
+        ) -> ChatSession {
+            ChatSession(
                 container,
-                // This model has no chat template. Its normal two-message prompt is
-                // joined with two newlines, so the separator belongs in the prefix.
-                instructions: systemPrompt + "\n\n",
+                instructions: systemPrompt,
                 generateParameters: GenerateParameters(
-                    maxTokens: 0,
+                    maxTokens: maximumOutputTokens,
                     temperature: 0
                 ),
-                additionalContext: ["add_generation_prompt": false]
+                additionalContext: ["enable_thinking": false]
             )
-
-            let temporaryURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("voiceink-refine-prefix-\(UUID().uuidString)")
-                .appendingPathExtension("safetensors")
-            defer {
-                try? FileManager.default.removeItem(at: temporaryURL)
-            }
-
-            let loadedCache: [KVCache]
-            do {
-                _ = try await cacheBuilder.respond(to: [Chat.Message]())
-                try Task.checkCancellation()
-                try await cacheBuilder.saveCache(to: temporaryURL)
-                (loadedCache, _) = try loadPromptCache(url: temporaryURL)
-                await cacheBuilder.clear()
-                try Task.checkCancellation()
-            } catch {
-                await cacheBuilder.clear()
-                throw error
-            }
-
-            systemPrefixCache = loadedCache
-            return loadedCache
         }
 
-        private func copy(cache: [KVCache]) -> [KVCache] {
-            cache.map { $0.copy() }
+        private static func maximumOutputTokens(forWordCount wordCount: Int) -> Int {
+            let scaledTokenLimit =
+                wordCount > maximumGenerationTokens / 3
+                ? maximumGenerationTokens
+                : wordCount * 3
+            return min(max(scaledTokenLimit, 256), maximumGenerationTokens)
         }
     #endif
 }
