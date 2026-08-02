@@ -22,24 +22,17 @@ struct VoiceInkRefineModelCardView: View {
     }
 
     private var headerSection: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(AppTheme.Accent.fillSubtle)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(AppTheme.Accent.border.opacity(0.7), lineWidth: 1)
-                    }
-
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppTheme.Accent.strong)
-            }
-            .frame(width: 24, height: 24)
-
+        HStack(alignment: .firstTextBaseline) {
             Text(VoiceInkRefineService.modelName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color(.labelColor))
+
+            Text("New")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.black)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color(red: 0.96, green: 0.79, blue: 0.63)))
 
             Spacer()
         }

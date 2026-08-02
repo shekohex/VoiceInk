@@ -232,7 +232,7 @@ actor VoiceInkRefineInferenceEngine {
                 instructions: systemPrompt,
                 generateParameters: GenerateParameters(
                     maxTokens: maximumOutputTokens,
-                    temperature: 0
+                    temperature: 0.3
                 ),
                 additionalContext: ["enable_thinking": false]
             )

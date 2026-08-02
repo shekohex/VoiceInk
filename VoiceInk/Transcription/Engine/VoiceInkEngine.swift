@@ -290,7 +290,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 return
                             }
 
-                            self.scheduleVoiceInkRefinePreparation(for: startID)
                             self.startRecordingContextCapture()
 
                             let modelResolution = ModeRuntimeResolver.transcriptionModelResolution(
@@ -357,6 +356,8 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                 self.recorder.onAudioChunk = nil
                                 _ = realtimeAudioGate.reset()
                             }
+
+                            self.scheduleVoiceInkRefinePreparation(for: startID)
 
                             Task { @MainActor [weak self] in
                                 guard let self else { return }
@@ -608,7 +609,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
 
         let didFinishActivePipeline = activePipelineTranscriptionID == transcriptionID
         if didFinishActivePipeline {
-            await finishRecorderSession()
             await cleanupResources()
             activePipelineTranscriptionID = nil
             currentSession = nil
@@ -644,7 +644,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
         case .starting, .recording:
             requestRecordingCancellation()
             await finishActiveRecorderCancellation()
-            shouldFinishSessionImmediately = true
+            shouldFinishSessionImmediately = false
         case .transcribing, .enhancing:
             requestRecordingCancellation()
             partialTranscript = ""
@@ -677,7 +677,6 @@ class VoiceInkEngine: NSObject, ObservableObject {
         recordedFile = nil
         recordingState = .idle
         await cleanupResources()
-        await finishRecorderSession()
     }
 
     private func requestRecordingCancellation() {
@@ -847,6 +846,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
         logger.notice("cleanupResources: releasing model resources")
         activeRecordingStartID = nil
         activeRecordingUseCase = .newSession
+        await finishRecorderSession()
         await whisperModelManager.cleanupResources()
         await serviceRegistry.cleanup()
         logger.notice("cleanupResources: completed")

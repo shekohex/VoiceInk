@@ -5435,6 +5435,22 @@
         }
       }
     },
+    "Custom prompts aren't available with VoiceInk Refine. Select a Mode that uses another AI provider." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzerdefinierte Prompts sind mit VoiceInk Refine nicht verfügbar. Wähle einen Modus mit einem anderen KI-Anbieter."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk Refine 不支持自定义提示词。请选择使用其他 AI 提供商的模式。"
+          }
+        }
+      }
+    },
     "Custom Transcription Models" : {
       "localizations" : {
         "de" : {
