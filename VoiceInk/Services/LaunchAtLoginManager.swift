@@ -49,6 +49,8 @@ final class LaunchAtLoginManager: ObservableObject {
     }
 
     func currentEnabledStatus() async -> Bool {
+        operationGeneration += 1
+
         while true {
             let generation = operationGeneration
 

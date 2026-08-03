@@ -56,7 +56,7 @@ actor VoiceInkRefineInferenceEngine {
             }
 
             if let preparationTask, preparationIdentity == requestedIdentity {
-                try await waitForPreparationTask(preparationTask)
+                try await preparationTask.value
                 return
             }
 

@@ -146,6 +146,12 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             return false
         }
 
+        let recordURL = snapshotDirectory.appendingPathComponent(verificationRecordFilename)
+        if !FileManager.default.fileExists(atPath: recordURL.path) {
+            // Existing installations use the original size-based completion check.
+            return true
+        }
+
         if storedVerificationRecord(at: snapshotDirectory) == currentRecord {
             return true
         }
@@ -157,7 +163,7 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
                     file: file
                 )
             }
-            try persistVerificationRecord(currentRecord, at: snapshotDirectory)
+            try? persistVerificationRecord(currentRecord, at: snapshotDirectory)
             return true
         } catch {
             return false

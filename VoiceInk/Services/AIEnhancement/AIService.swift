@@ -349,6 +349,7 @@ class AIService: ObservableObject {
                     let isAvailable = self.voiceInkRefineService.isAvailableInModes
                     if self.isAPIKeyValid != isAvailable {
                         self.isAPIKeyValid = isAvailable
+                        return
                     }
                 }
 
