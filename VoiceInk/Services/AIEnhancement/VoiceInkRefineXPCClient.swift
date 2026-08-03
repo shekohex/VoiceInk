@@ -36,6 +36,30 @@ private enum VoiceInkRefineXPCOperation {
     case enhance
 }
 
+private enum VoiceInkRefineXPCOperationWaiter {
+    case standard(CheckedContinuation<Void, Never>)
+    case cancellable(id: UUID, continuation: CheckedContinuation<Void, Error>)
+
+    var id: UUID? {
+        guard case .cancellable(let id, _) = self else { return nil }
+        return id
+    }
+
+    func resume() {
+        switch self {
+        case .standard(let continuation):
+            continuation.resume()
+        case .cancellable(_, let continuation):
+            continuation.resume()
+        }
+    }
+
+    func cancel() {
+        guard case .cancellable(_, let continuation) = self else { return }
+        continuation.resume(throwing: CancellationError())
+    }
+}
+
 actor VoiceInkRefineXPCClient {
     private static let warmGracePeriod: Duration = .seconds(10)
 
@@ -47,17 +71,16 @@ actor VoiceInkRefineXPCClient {
     private var connection: NSXPCConnection?
     private var connectionID: UUID?
     private var operationIsActive = false
-    private var operationWaiters: [CheckedContinuation<Void, Never>] = []
+    private var operationWaiters: [VoiceInkRefineXPCOperationWaiter] = []
     private var idleShutdownTask: Task<Void, Never>?
     private var idleShutdownToken: UUID?
 
     func prepare(modelDirectory: URL, systemPrompt: String) async throws {
-        cancelIdleShutdown()
-        await acquireOperation()
+        try await acquireCancellableOperation()
         defer { releaseOperation() }
 
-        cancelIdleShutdown()
         try Task.checkCancellation()
+        cancelIdleShutdown()
 
         let request = VoiceInkRefinePrepareRequest(
             requestID: UUID(),
@@ -100,9 +123,13 @@ actor VoiceInkRefineXPCClient {
             } onCancel: {
                 cancellationHandle.cancel()
             }
+            try Task.checkCancellation()
         } catch {
-            logFailure(error, operation: .prepare)
             invalidateIfCurrent(activeConnection)
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            logFailure(error, operation: .prepare)
             throw localizedError(error, operation: .prepare)
         }
     }
@@ -112,12 +139,11 @@ actor VoiceInkRefineXPCClient {
         modelDirectory: URL,
         systemPrompt: String
     ) async throws -> String {
-        cancelIdleShutdown()
-        await acquireOperation()
+        try await acquireCancellableOperation()
         defer { releaseOperation() }
 
-        cancelIdleShutdown()
         try Task.checkCancellation()
+        cancelIdleShutdown()
 
         let request = VoiceInkRefineEnhanceRequest(
             requestID: UUID(),
@@ -171,6 +197,7 @@ actor VoiceInkRefineXPCClient {
             } onCancel: {
                 cancellationHandle.cancel()
             }
+            try Task.checkCancellation()
 
             let response = try JSONDecoder().decode(
                 VoiceInkRefineEnhanceResponse.self,
@@ -186,8 +213,11 @@ actor VoiceInkRefineXPCClient {
             scheduleIdleShutdown(for: activeConnection)
             return response.output
         } catch {
-            logFailure(error, operation: .enhance)
             invalidateIfCurrent(activeConnection)
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            logFailure(error, operation: .enhance)
             throw localizedError(error, operation: .enhance)
         }
     }
@@ -307,8 +337,44 @@ actor VoiceInkRefineXPCClient {
         }
 
         await withCheckedContinuation { continuation in
-            operationWaiters.append(continuation)
+            operationWaiters.append(.standard(continuation))
         }
+    }
+
+    private func acquireCancellableOperation() async throws {
+        try Task.checkCancellation()
+
+        guard operationIsActive else {
+            operationIsActive = true
+            return
+        }
+
+        let waiterID = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                operationWaiters.append(
+                    .cancellable(id: waiterID, continuation: continuation)
+                )
+            }
+        } onCancel: {
+            Task {
+                await self.cancelOperationWaiter(id: waiterID)
+            }
+        }
+    }
+
+    private func cancelOperationWaiter(id: UUID) {
+        guard let index = operationWaiters.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        let waiter = operationWaiters.remove(at: index)
+        waiter.cancel()
     }
 
     private func releaseOperation() {
@@ -317,8 +383,7 @@ actor VoiceInkRefineXPCClient {
             return
         }
 
-        let nextWaiter = operationWaiters.removeFirst()
-        nextWaiter.resume()
+        operationWaiters.removeFirst().resume()
     }
 
     private func requestShutdown(of activeConnection: NSXPCConnection) async {

@@ -13,6 +13,8 @@ final class LaunchAtLoginManager: ObservableObject {
     private let logger = Logger(subsystem: "com.prakashjoshipax.voiceink", category: "LaunchAtLogin")
     private var isRefreshing = false
     private var operationGeneration = 0
+    private var pendingEnabledState: Bool?
+    private var updateTask: Task<Void, Never>?
 
     private init() {
         refresh()
@@ -34,19 +36,45 @@ final class LaunchAtLoginManager: ObservableObject {
     }
 
     func setEnabled(_ enabled: Bool) {
-        guard !isUpdating else { return }
-
         operationGeneration += 1
-        let generation = operationGeneration
         isEnabled = enabled
-        isUpdating = true
+        pendingEnabledState = enabled
 
-        Task {
+        guard updateTask == nil else { return }
+
+        isUpdating = true
+        updateTask = Task { [weak self] in
+            await self?.applyPendingEnabledStates()
+        }
+    }
+
+    func currentEnabledStatus() async -> Bool {
+        while true {
+            let generation = operationGeneration
+
+            if let updateTask {
+                await updateTask.value
+                continue
+            }
+
+            let enabled = await Self.readEnabledStatus()
+            guard generation == operationGeneration, updateTask == nil else {
+                continue
+            }
+
+            isEnabled = enabled
+            return enabled
+        }
+    }
+
+    private func applyPendingEnabledStates() async {
+        while let enabled = pendingEnabledState {
+            pendingEnabledState = nil
             let result = await Self.updateRegistration(enabled: enabled)
 
-            guard generation == operationGeneration else { return }
-            isUpdating = false
-            isEnabled = result.isEnabled
+            if pendingEnabledState == nil {
+                isEnabled = result.isEnabled
+            }
 
             if let errorDescription = result.errorDescription {
                 logger.error(
@@ -54,6 +82,9 @@ final class LaunchAtLoginManager: ObservableObject {
                 )
             }
         }
+
+        isUpdating = false
+        updateTask = nil
     }
 
     private nonisolated static func readEnabledStatus() async -> Bool {

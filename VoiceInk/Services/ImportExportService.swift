@@ -121,9 +121,10 @@ class ImportExportService {
         enhancementService: AIEnhancementService, recordingShortcutManager: RecordingShortcutManager,
         menuBarManager: MenuBarManager, mediaController: MediaController, playbackController: PlaybackController,
         recorderUIManager: RecorderUIManager, modelContext: ModelContext
-    ) {
+    ) async {
         let modeManager = ModeManager.shared
         let emojiManager = EmojiManager.shared
+        let launchAtLoginEnabled = await LaunchAtLoginManager.shared.currentEnabledStatus()
 
         let modeConfigs = modeManager.configurations
         let modeShortcuts = Dictionary(
@@ -167,7 +168,7 @@ class ImportExportService {
             secondaryRecordingShortcutModeRawValue: recordingShortcutManager.secondaryRecordingShortcutMode.rawValue,
             isMiddleClickToggleEnabled: recordingShortcutManager.isMiddleClickToggleEnabled,
             middleClickActivationDelay: recordingShortcutManager.middleClickActivationDelay,
-            launchAtLoginEnabled: LaunchAtLoginManager.shared.isEnabled,
+            launchAtLoginEnabled: launchAtLoginEnabled,
             isMenuBarOnly: menuBarManager.isMenuBarOnly,
             recorderType: recorderUIManager.recorderPanelStyle.rawValue,
             appAppearancePreference: AppAppearancePreference.stored.rawValue,

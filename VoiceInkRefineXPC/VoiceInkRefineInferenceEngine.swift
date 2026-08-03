@@ -56,7 +56,7 @@ actor VoiceInkRefineInferenceEngine {
             }
 
             if let preparationTask, preparationIdentity == requestedIdentity {
-                try await preparationTask.value
+                try await waitForPreparationTask(preparationTask)
                 return
             }
 
@@ -75,7 +75,7 @@ actor VoiceInkRefineInferenceEngine {
             preparationTask = task
 
             do {
-                try await task.value
+                try await waitForPreparationTask(task)
                 preparationTask = nil
             } catch {
                 preparationTask = nil
@@ -107,8 +107,10 @@ actor VoiceInkRefineInferenceEngine {
                 throw VoiceInkRefineInferenceError.modelNotLoaded
             }
 
-            let wordCount = transcript.split(whereSeparator: \.isWhitespace).count
-            let maximumOutputTokens = Self.maximumOutputTokens(forWordCount: wordCount)
+            let inputTokenCount = await modelContainer.encode(transcript).count
+            let maximumOutputTokens = Self.maximumOutputTokens(
+                forInputTokenCount: inputTokenCount
+            )
             let session = makeSession(
                 using: modelContainer,
                 systemPrompt: systemPrompt,
@@ -238,11 +240,23 @@ actor VoiceInkRefineInferenceEngine {
             )
         }
 
-        private static func maximumOutputTokens(forWordCount wordCount: Int) -> Int {
+        private func waitForPreparationTask(
+            _ task: Task<Void, Error>
+        ) async throws {
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+        }
+
+        private static func maximumOutputTokens(
+            forInputTokenCount inputTokenCount: Int
+        ) -> Int {
             let scaledTokenLimit =
-                wordCount > maximumGenerationTokens / 3
+                inputTokenCount > maximumGenerationTokens / 2
                 ? maximumGenerationTokens
-                : wordCount * 3
+                : inputTokenCount * 2
             return min(max(scaledTokenLimit, 256), maximumGenerationTokens)
         }
     #endif

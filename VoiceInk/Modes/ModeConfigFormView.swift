@@ -582,10 +582,6 @@ struct ModeConfigFormView: View {
 
     private func applyVoiceInkRefineRules() {
         draft.selectedAIModel = VoiceInkRefineService.modelName
-        draft.selectedPromptId = nil
-        draft.useClipboardContext = false
-        draft.useSelectedTextContext = false
-        draft.useScreenCapture = false
         applyOutputRules()
     }
 

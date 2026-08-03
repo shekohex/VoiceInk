@@ -49,28 +49,79 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
     }
 
     static let files: [ModelFile] = [
-        ModelFile(path: ".gitattributes", size: 1_570),
-        ModelFile(path: "LICENSE-QWEN-APACHE-2.0.txt", size: 11_544),
-        ModelFile(path: "LICENSE.md", size: 275),
-        ModelFile(path: "README.md", size: 965),
-        ModelFile(path: "THIRD_PARTY_NOTICES.md", size: 479),
-        ModelFile(path: "chat_template.jinja", size: 6_412),
-        ModelFile(path: "config.json", size: 2_479),
+        ModelFile(
+            path: ".gitattributes",
+            size: 1_570,
+            sha256: "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930"
+        ),
+        ModelFile(
+            path: "LICENSE-QWEN-APACHE-2.0.txt",
+            size: 11_544,
+            sha256: "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+        ),
+        ModelFile(
+            path: "LICENSE.md",
+            size: 275,
+            sha256: "ab9ec0078c932a50c5dc077d58fd1b77aa1f8ad395cc93c314cce84fa5263e11"
+        ),
+        ModelFile(
+            path: "README.md",
+            size: 965,
+            sha256: "c4fd4a4e32552136f44dbd9526ee6ba97e02078ba520e89ab0e68de518642a0b"
+        ),
+        ModelFile(
+            path: "THIRD_PARTY_NOTICES.md",
+            size: 479,
+            sha256: "bb910585f2eab7e4fdc42b434f50d3c27fd29737ce32644ee2c0c26981015c19"
+        ),
+        ModelFile(
+            path: "chat_template.jinja",
+            size: 6_412,
+            sha256: "83b19588ce0999213e4a36b855e104d3937c6271bb5711400dd399407233a3d4"
+        ),
+        ModelFile(
+            path: "config.json",
+            size: 2_479,
+            sha256: "257f7f080bde674382cb09df314bf4f2b5d4f5c6b6465d3a8d6c98d8443b5b12"
+        ),
         ModelFile(
             path: "model.safetensors",
             size: 1_059_404_951,
             sha256: "3cdfe2f506f71f2c5d5af23aa8fe3572989d2f364a7317322220621a86aaf5f6"
         ),
-        ModelFile(path: "model.safetensors.index.json", size: 60_786),
+        ModelFile(
+            path: "model.safetensors.index.json",
+            size: 60_786,
+            sha256: "3b2dffa510d1d73decdbc12d5e1bc7d6a9f7b2deb631bfd84238a1f8fc4e0fd1"
+        ),
         ModelFile(
             path: "tokenizer.json",
             size: 19_989_325,
             sha256: "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
         ),
-        ModelFile(path: "tokenizer_config.json", size: 582),
+        ModelFile(
+            path: "tokenizer_config.json",
+            size: 582,
+            sha256: "f7c2417da2c86b4fa75c6bbabc8be6cbc8de0ec971bd153f49fd1d0907ed2b1e"
+        ),
     ]
 
     static let totalBytes = files.reduce(Int64(0)) { $0 + $1.size }
+
+    private struct SnapshotVerificationRecord: Codable, Equatable {
+        let version: Int
+        let files: [SnapshotFileVerificationRecord]
+    }
+
+    private struct SnapshotFileVerificationRecord: Codable, Equatable {
+        let path: String
+        let size: Int64
+        let expectedSHA256: String?
+        let modificationTime: TimeInterval
+    }
+
+    private static let verificationRecordVersion = 1
+    private static let verificationRecordFilename = ".voiceink-integrity.json"
 
     static func snapshotDirectory(
         in modelRootDirectory: URL,
@@ -81,8 +132,35 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
     }
 
     static func isSnapshotComplete(at snapshotDirectory: URL) -> Bool {
-        files.allSatisfy { file in
-            fileSize(at: snapshotDirectory.appendingPathComponent(file.path)) == file.size
+        isSnapshotComplete(at: snapshotDirectory, files: files)
+    }
+
+    static func isSnapshotComplete(
+        at snapshotDirectory: URL,
+        files: [ModelFile]
+    ) -> Bool {
+        guard let currentRecord = verificationRecord(
+            at: snapshotDirectory,
+            files: files
+        ) else {
+            return false
+        }
+
+        if storedVerificationRecord(at: snapshotDirectory) == currentRecord {
+            return true
+        }
+
+        do {
+            for file in files {
+                try validateDownloadedFile(
+                    at: snapshotDirectory.appendingPathComponent(file.path),
+                    file: file
+                )
+            }
+            try persistVerificationRecord(currentRecord, at: snapshotDirectory)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -102,7 +180,7 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             revision: revision
         )
         partialsDirectory = modelRootDirectory
-            .appendingPathComponent(".voiceink-download-\(revision)")
+            .appendingPathComponent(".voiceink-download-\(revision)", isDirectory: true)
     }
 
     var progress: VoiceInkRefineDownloadProgress {
@@ -142,13 +220,16 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
             try Task.checkCancellation()
 
             let finalURL = snapshotDirectory.appendingPathComponent(file.path)
-            if Self.fileSize(at: finalURL) == file.size {
-                progressTracker.update(identifier: file.path, downloadedBytes: file.size)
-                continue
-            }
-
             if FileManager.default.fileExists(atPath: finalURL.path) {
-                try FileManager.default.removeItem(at: finalURL)
+                do {
+                    try Self.validateDownloadedFile(at: finalURL, file: file)
+                    progressTracker.update(identifier: file.path, downloadedBytes: file.size)
+                    continue
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    try FileManager.default.removeItem(at: finalURL)
+                }
             }
 
             let partialURL = partialURL(for: file)
@@ -202,9 +283,20 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
 
         var partialSize = Self.fileSize(at: partialURL) ?? 0
         if partialSize == file.size {
-            try Self.validateDownloadedFile(at: partialURL, file: file)
-            try installDownloadedFile(at: partialURL, file: file)
-            return
+            do {
+                try Self.validateDownloadedFile(at: partialURL, file: file)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                clearPartialDownload(for: file)
+                partialSize = 0
+                progressTracker.update(identifier: file.path, downloadedBytes: 0)
+            }
+
+            if partialSize == file.size {
+                try installDownloadedFile(at: partialURL, file: file)
+                return
+            }
         }
 
         if partialSize > file.size {
@@ -273,6 +365,8 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
 
         do {
             try Self.validateDownloadedFile(at: partialURL, file: file)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             clearPartialDownload(for: file)
             progressTracker.update(identifier: file.path, downloadedBytes: 0)
@@ -354,17 +448,21 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
 
     private func validateSnapshot() throws {
         for file in Self.files {
-            let actualSize = Self.fileSize(
-                at: snapshotDirectory.appendingPathComponent(file.path)
-            ) ?? 0
-            guard actualSize == file.size else {
-                throw VoiceInkRefineDownloadError.invalidFileSize(
-                    file.path,
-                    expected: file.size,
-                    actual: actualSize
-                )
-            }
+            try Self.validateDownloadedFile(
+                at: snapshotDirectory.appendingPathComponent(file.path),
+                file: file
+            )
         }
+
+        guard let record = Self.verificationRecord(
+            at: snapshotDirectory,
+            files: Self.files
+        ) else {
+            throw VoiceInkRefineDownloadError.invalidResponse(
+                Self.verificationRecordFilename
+            )
+        }
+        try Self.persistVerificationRecord(record, at: snapshotDirectory)
     }
 
     private func downloadURL(for file: ModelFile) -> URL? {
@@ -415,7 +513,7 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
         }
     }
 
-    private static func validateDownloadedFile(
+    static func validateDownloadedFile(
         at url: URL,
         file: ModelFile
     ) throws {
@@ -455,6 +553,60 @@ final class VoiceInkRefineModelDownloader: @unchecked Sendable {
         return hasher.finalize()
             .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    private static func verificationRecord(
+        at snapshotDirectory: URL,
+        files: [ModelFile]
+    ) -> SnapshotVerificationRecord? {
+        let fileManager = FileManager.default
+        var records: [SnapshotFileVerificationRecord] = []
+        records.reserveCapacity(files.count)
+
+        for file in files {
+            let fileURL = snapshotDirectory.appendingPathComponent(file.path)
+            guard
+                let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path),
+                let size = (attributes[.size] as? NSNumber)?.int64Value,
+                size == file.size,
+                let modificationDate = attributes[.modificationDate] as? Date
+            else {
+                return nil
+            }
+
+            records.append(
+                SnapshotFileVerificationRecord(
+                    path: file.path,
+                    size: size,
+                    expectedSHA256: file.sha256,
+                    modificationTime: modificationDate.timeIntervalSinceReferenceDate
+                )
+            )
+        }
+
+        return SnapshotVerificationRecord(
+            version: verificationRecordVersion,
+            files: records
+        )
+    }
+
+    private static func storedVerificationRecord(
+        at snapshotDirectory: URL
+    ) -> SnapshotVerificationRecord? {
+        let url = snapshotDirectory.appendingPathComponent(verificationRecordFilename)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SnapshotVerificationRecord.self, from: data)
+    }
+
+    private static func persistVerificationRecord(
+        _ record: SnapshotVerificationRecord,
+        at snapshotDirectory: URL
+    ) throws {
+        let data = try JSONEncoder().encode(record)
+        try data.write(
+            to: snapshotDirectory.appendingPathComponent(verificationRecordFilename),
+            options: .atomic
+        )
     }
 
     private static func fileSize(at url: URL) -> Int64? {

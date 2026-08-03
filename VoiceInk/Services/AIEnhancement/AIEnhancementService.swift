@@ -215,6 +215,8 @@ class AIEnhancementService: ObservableObject {
                     nil,
                     text
                 )
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 throw EnhancementError.customError(error.localizedDescription)
             }
@@ -564,27 +566,10 @@ class AIEnhancementService: ObservableObject {
 
         for index in updatedConfigurations.indices {
             if updatedConfigurations[index].selectedAIProvider == AIProvider.voiceInkRefine.rawValue {
-                if updatedConfigurations[index].selectedPrompt != nil {
-                    updatedConfigurations[index].selectedPrompt = nil
-                    didUpdateModes = true
-                }
                 if updatedConfigurations[index].selectedAIModel != VoiceInkRefineService.modelName {
                     updatedConfigurations[index].selectedAIModel = VoiceInkRefineService.modelName
                     didUpdateModes = true
                 }
-                if updatedConfigurations[index].useClipboardContext {
-                    updatedConfigurations[index].useClipboardContext = false
-                    didUpdateModes = true
-                }
-                if updatedConfigurations[index].useSelectedTextContext {
-                    updatedConfigurations[index].useSelectedTextContext = false
-                    didUpdateModes = true
-                }
-                if updatedConfigurations[index].useScreenCapture {
-                    updatedConfigurations[index].useScreenCapture = false
-                    didUpdateModes = true
-                }
-                continue
             }
 
             let selectedPrompt = updatedConfigurations[index].selectedPrompt

@@ -343,7 +343,16 @@ class AIService: ObservableObject {
 
         voiceInkRefineObserver = voiceInkRefineService.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async {
-                self?.objectWillChange.send()
+                guard let self else { return }
+
+                if self.selectedProvider == .voiceInkRefine {
+                    let isAvailable = self.voiceInkRefineService.isAvailableInModes
+                    if self.isAPIKeyValid != isAvailable {
+                        self.isAPIKeyValid = isAvailable
+                    }
+                }
+
+                self.objectWillChange.send()
             }
         }
 

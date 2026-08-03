@@ -106,10 +106,6 @@ struct ModeConfigDraft {
 
         if provider == .voiceInkRefine {
             selectedAIModel = provider.defaultModel
-            selectedPromptId = nil
-            useClipboardContext = false
-            useSelectedTextContext = false
-            useScreenCapture = false
             return
         }
 
@@ -136,7 +132,6 @@ struct ModeConfigDraft {
 
     mutating func ensurePromptSelection(firstPromptId: UUID?) {
         guard selectedAIProvider != AIProvider.voiceInkRefine.rawValue else {
-            selectedPromptId = nil
             return
         }
 
