@@ -27,15 +27,56 @@ struct OnboardingAPIScreen: View {
                 onVerificationChanged: onVerificationChanged
             )
         } bottomBar: {
-            OnboardingBottomBar(
-                leadingTitle: "Back",
-                primaryTitle: "Continue",
-                isPrimaryEnabled: canContinue && isSelectedProviderVerified,
-                onLeading: onBack,
-                onPrimary: onContinue,
-                skipTitle: isSelectedProviderVerified ? nil : "Skip This Step",
-                onSkip: isSelectedProviderVerified ? nil : onRequestSkip
-            )
+            HStack(spacing: 0) {
+                Button(action: onBack) {
+                    Text("Back")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppTheme.Action.secondaryForeground)
+                        .frame(width: 132, height: 42)
+                        .background(AppMaterialCardBackground(cornerRadius: AppTheme.Radius.control))
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                if !isSelectedProviderVerified {
+                    Button(action: onRequestSkip) {
+                        Text("Set It Up Later")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(AppTheme.Text.secondary)
+                            .padding(.horizontal, 4)
+                            .frame(height: 20)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .allowsTightening(true)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: onContinue) {
+                    Text("Continue")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(
+                            canContinue && isSelectedProviderVerified
+                                ? AppTheme.Action.primaryForeground : AppTheme.Action.disabledForeground
+                        )
+                        .padding(.horizontal, 20)
+                        .frame(minWidth: 132, minHeight: 42)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.control, style: .continuous)
+                                .fill(
+                                    canContinue && isSelectedProviderVerified
+                                        ? AppTheme.Action.primaryFill : AppTheme.Action.disabledFill
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!(canContinue && isSelectedProviderVerified))
+            }
+            .frame(maxWidth: OnboardingLayout.chromeMaxWidth)
         }
         .alert("Skip API setup?", isPresented: $isShowingSkipWarning) {
             Button("Cancel", role: .cancel) {}

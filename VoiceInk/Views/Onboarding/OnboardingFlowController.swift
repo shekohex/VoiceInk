@@ -143,6 +143,7 @@ final class OnboardingFlowController {
     func continueFromContextAwarenessStep(enhancementService: AIEnhancementService) {
         let nextIndex = coordinator.normalizedExperienceStepIndex + 1
         guard coordinator.activeExperienceSteps.indices.contains(nextIndex) else {
+            coordinator.storedStage = OnboardingStage.trust.rawValue
             return
         }
 

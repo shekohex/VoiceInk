@@ -172,8 +172,9 @@ final class OnboardingCoordinator: ObservableObject {
     }
 
     var shouldShowContextAwarenessAfterCurrentExperience: Bool {
+        guard experienceStep.showsContextAwarenessAfterCompletion else { return false }
         let nextIndex = normalizedExperienceStepIndex + 1
-        return experienceStep.showsContextAwarenessAfterCompletion && activeExperienceSteps.indices.contains(nextIndex)
+        return activeExperienceSteps.indices.contains(nextIndex) || isLastExperienceStep
     }
 
     var shouldShowContextAwarenessBeforeCurrentExperience: Bool {
@@ -315,14 +316,11 @@ final class OnboardingCoordinator: ObservableObject {
 
     private var contextAwarenessInsertionIndices: [Int] {
         activeExperienceSteps.indices.compactMap { index in
-            let nextIndex = index + 1
-            guard activeExperienceSteps[index].showsContextAwarenessAfterCompletion,
-                activeExperienceSteps.indices.contains(nextIndex)
-            else {
+            guard activeExperienceSteps[index].showsContextAwarenessAfterCompletion else {
                 return nil
             }
 
-            return nextIndex
+            return index + 1
         }
     }
 
