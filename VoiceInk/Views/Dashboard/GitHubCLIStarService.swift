@@ -55,11 +55,14 @@ enum GitHubCLIStarService {
             return found
         }
 
-        guard let result = await runLoginShell("command -v gh"), result.exitCode == 0 else {
-            return nil
-        }
-        let path = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
-        return path.isEmpty ? nil : path
+        // Reuses the shared, bounded PATH resolver (sources .zshrc via an interactive-login fallback)
+        // instead of shelling out separately here.
+        return await Task.detached(priority: .utility) {
+            let path = ShellCommandEnvironment.preferredPATH(fallback: ProcessInfo.processInfo.environment["PATH"])
+            return path.split(separator: ":")
+                .map { "\($0)/gh" }
+                .first { FileManager.default.isExecutableFile(atPath: $0) }
+        }.value
     }
 
     // MARK: - process execution
@@ -73,14 +76,6 @@ enum GitHubCLIStarService {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 continuation.resume(returning: execute(executablePath: executablePath, arguments: arguments))
-            }
-        }
-    }
-
-    private static func runLoginShell(_ command: String) async -> ProcessResult? {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(returning: execute(executablePath: "/bin/zsh", arguments: ["-l", "-c", command]))
             }
         }
     }

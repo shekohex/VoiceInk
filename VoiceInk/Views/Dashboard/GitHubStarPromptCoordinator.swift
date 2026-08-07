@@ -90,9 +90,10 @@ final class GitHubStarPromptCoordinator: ObservableObject {
         guard !isStarring, completionState == .none else { return }
 
         if mode == .web {
+            // Only mark resolved if the browser actually opened - keeps the retry path alive otherwise.
+            guard NSWorkspace.shared.open(Self.repoURL) else { return }
             UserDefaults.standard.set(true, forKey: Keys.hasStarred)
             isResolved = true
-            NSWorkspace.shared.open(Self.repoURL)
             presentCompletion(.opened)
             return
         }

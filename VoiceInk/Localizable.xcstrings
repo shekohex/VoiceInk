@@ -6404,6 +6404,7 @@
       }
     },
     "Downloading" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9152,6 +9153,7 @@
       }
     },
     "Keyboard shortcut:" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9747,6 +9749,7 @@
       }
     },
     "Local CLI" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10709,6 +10712,7 @@
       }
     },
     "Next" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -12949,6 +12953,7 @@
       }
     },
     "Re-enhancement failed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13029,6 +13034,7 @@
       }
     },
     "Ready" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -14140,6 +14146,7 @@
       }
     },
     "Sample text" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -15130,6 +15137,7 @@
       }
     },
     "Shows live text while recording with realtime models." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15146,6 +15154,7 @@
       }
     },
     "Skip" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17394,6 +17403,7 @@
       }
     },
     "Try a Simple Dictation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -17404,6 +17414,7 @@
       }
     },
     "Try Enhancement" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -17447,6 +17458,7 @@
       }
     },
     "Turn your spoken note into a clean email draft with VoiceInk." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -19012,6 +19024,7 @@
       }
     },
     "Write an Email" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -19247,6 +19260,7 @@
       }
     },
     "Your dictated text will appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -19257,6 +19271,7 @@
       }
     },
     "Your enhanced message will appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -19285,6 +19300,7 @@
       }
     },
     "Your formatted email will appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

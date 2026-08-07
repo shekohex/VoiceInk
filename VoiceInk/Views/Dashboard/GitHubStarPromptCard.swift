@@ -12,8 +12,10 @@ struct GitHubStarPromptCard: View {
         VStack(alignment: .leading, spacing: 12) {
             if completionState == .none {
                 askContent
+                    .transition(.opacity)
             } else {
                 completionContent
+                    .transition(.opacity)
             }
         }
         .padding(14)
@@ -24,6 +26,7 @@ struct GitHubStarPromptCard: View {
                 .strokeBorder(AppTheme.Border.card, lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.22), radius: 22, x: 0, y: 10)
+        .animation(.easeInOut(duration: 0.2), value: completionState)
     }
 
     private var askContent: some View {
