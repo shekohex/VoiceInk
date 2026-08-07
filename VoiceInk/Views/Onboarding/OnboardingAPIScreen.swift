@@ -45,7 +45,7 @@ struct OnboardingAPIScreen: View {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(AppTheme.Text.secondary)
                             .padding(.horizontal, 4)
-                            .frame(height: 20)
+                            .frame(minHeight: 42)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                             .allowsTightening(true)
