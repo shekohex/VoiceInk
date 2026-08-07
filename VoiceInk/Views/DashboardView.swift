@@ -22,6 +22,7 @@ struct DashboardView: View {
                 GitHubStarPromptCard(
                     isBusy: starPrompt.isStarring,
                     completionState: starPrompt.completionState,
+                    openFailed: starPrompt.openFailed,
                     onStar: { starPrompt.star() },
                     onLater: { starPrompt.later() }
                 )
