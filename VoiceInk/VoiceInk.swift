@@ -302,6 +302,8 @@ struct VoiceInkApp: App {
 
                             showLaunchRemindersIfNeeded()
 
+                            GitHubStarPromptCoordinator.shared.scheduleIfNeeded(modelContainer: container)
+
                             // Run due audio-only cleanup and schedule future checks when transcript cleanup is not managing retention.
                             if !UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isTranscriptionCleanupEnabled)
                                 && UserDefaults.standard.bool(forKey: CleanupSettingsKeys.isAudioCleanupEnabled)

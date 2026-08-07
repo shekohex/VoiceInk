@@ -161,9 +161,17 @@ final class OnboardingFlowController {
         }
 
         let previousIndex = max(coordinator.activeExperienceSteps.count - 1, 0)
-        coordinator.storedStage = OnboardingStage.experience.rawValue
         coordinator.experienceStepIndex = previousIndex
         coordinator.isExperienceInIntroPhase = false
+
+        // Mirrors the forward path back through Context Awareness.
+        if coordinator.activeExperienceSteps.last?.showsContextAwarenessAfterCompletion == true {
+            activateCleanTranscriptionMode()
+            coordinator.storedStage = OnboardingStage.contextAwareness.rawValue
+            return
+        }
+
+        coordinator.storedStage = OnboardingStage.experience.rawValue
         installExperienceMode(at: previousIndex, enhancementService: enhancementService)
         activateExperienceModeForDemo()
         refreshExperienceModeState(enhancementService: enhancementService)

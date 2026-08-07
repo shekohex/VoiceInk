@@ -78,13 +78,13 @@ struct OnboardingAPIScreen: View {
             }
             .frame(maxWidth: OnboardingLayout.chromeMaxWidth)
         }
-        .alert("Skip API setup?", isPresented: $isShowingSkipWarning) {
-            Button("Cancel", role: .cancel) {}
-            Button("Skip API setup", role: .destructive) {
+        .alert("Set up AI enhancement later?", isPresented: $isShowingSkipWarning) {
+            Button("Go Back", role: .cancel) {}
+            Button("Set It Up Later") {
                 onConfirmSkip()
             }
         } message: {
-            Text("Enhancement modes and AI actions will stay off. You can always set it up later in the app.")
+            Text("Enhancement modes and AI actions will stay off until you add a key. You can set this up anytime from Settings.")
         }
     }
 }

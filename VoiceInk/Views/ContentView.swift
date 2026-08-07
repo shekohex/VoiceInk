@@ -50,7 +50,6 @@ struct ContentView: View {
         .frame(minHeight: AppWindowLayout.minimumHeight)
         .onAppear {
             logger.notice("ContentView appeared")
-            GitHubStarPromptCoordinator.shared.scheduleIfNeeded()
         }
         .onDisappear {
             logger.notice("ContentView disappeared")

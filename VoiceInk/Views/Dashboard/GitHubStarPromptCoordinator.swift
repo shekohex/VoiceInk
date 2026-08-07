@@ -1,8 +1,9 @@
 import AppKit
 import Combine
 import Foundation
+import SwiftData
 
-// Drives the Dashboard's "help people discover VoiceInk" GitHub star card; triggered by window launch, not onboarding.
+// Drives the Dashboard's "help people discover VoiceInk" GitHub star card; gated on session count, not just window launch.
 @MainActor
 final class GitHubStarPromptCoordinator: ObservableObject {
     static let shared = GitHubStarPromptCoordinator()
@@ -33,6 +34,7 @@ final class GitHubStarPromptCoordinator: ObservableObject {
     private static let repoURL = URL(string: "https://github.com/Beingpax/VoiceInk")!
     private static let showDelaySeconds: TimeInterval = 3
     private static let completionDisplaySeconds: TimeInterval = 1.5
+    private static let minimumCompletedSessionsToPrompt = 30
 
     private enum Keys {
         static let hasStarred = "GitHubStarPromptHasStarred"
@@ -41,6 +43,7 @@ final class GitHubStarPromptCoordinator: ObservableObject {
 
     private var hasScheduled = false
     private var scheduleTask: Task<Void, Never>?
+    private var modelContainer: ModelContainer?
 
     private init() {
         let defaults = UserDefaults.standard
@@ -49,9 +52,10 @@ final class GitHubStarPromptCoordinator: ObservableObject {
     }
 
     // Call once when the main window appears; only the first call per app run schedules the timer.
-    func scheduleIfNeeded() {
+    func scheduleIfNeeded(modelContainer: ModelContainer) {
         guard !hasScheduled else { return }
         hasScheduled = true
+        self.modelContainer = modelContainer
         guard Self.shouldShow else { return }
 
         scheduleTask = Task { [weak self] in
@@ -63,6 +67,7 @@ final class GitHubStarPromptCoordinator: ObservableObject {
 
     private func evaluateAndPresent() async {
         guard Self.shouldShow else { return }
+        guard await hasReachedSessionThreshold() else { return }
 
         // Skip showing the card entirely if gh says the repo is already starred.
         let remoteState = await GitHubCLIStarService.checkRemoteStarState()
@@ -131,5 +136,16 @@ final class GitHubStarPromptCoordinator: ObservableObject {
         if defaults.bool(forKey: Keys.hasStarred) { return false }
         if defaults.bool(forKey: Keys.hasDeferredOnce) { return false }
         return true
+    }
+
+    private func hasReachedSessionThreshold() async -> Bool {
+        guard let modelContainer else { return false }
+        let threshold = Self.minimumCompletedSessionsToPrompt
+
+        return await Task.detached(priority: .utility) {
+            let backgroundContext = ModelContext(modelContainer)
+            let count = (try? backgroundContext.fetchCount(FetchDescriptor<SessionMetric>())) ?? 0
+            return count >= threshold
+        }.value
     }
 }
