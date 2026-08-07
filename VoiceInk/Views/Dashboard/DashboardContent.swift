@@ -548,13 +548,17 @@ struct DashboardContent: View {
 
     @ViewBuilder
     private var footerStarButtonLabel: some View {
-        switch starPrompt.completionState {
-        case .starred:
-            footerActionLabel(icon: "checkmark", title: "Starred — thank you!", color: AppTheme.Sidebar.license)
-        case .opened:
-            footerActionLabel(icon: "arrow.up.right", title: "GitHub opened", color: AppTheme.Sidebar.fallback)
-        case .none:
-            footerActionLabel(icon: "star", title: "Star on GitHub", color: AppTheme.Sidebar.fallback)
+        if starPrompt.openFailed {
+            footerActionLabel(icon: "exclamationmark.triangle.fill", title: "Couldn't open — try again", color: .orange)
+        } else {
+            switch starPrompt.completionState {
+            case .starred:
+                footerActionLabel(icon: "checkmark", title: "Starred — thank you!", color: AppTheme.Sidebar.license)
+            case .opened:
+                footerActionLabel(icon: "arrow.up.right", title: "GitHub opened", color: AppTheme.Sidebar.fallback)
+            case .none:
+                footerActionLabel(icon: "star", title: "Star on GitHub", color: AppTheme.Sidebar.fallback)
+            }
         }
     }
 
@@ -567,6 +571,7 @@ struct DashboardContent: View {
                 .buttonStyle(.plain)
                 .fixedSize(horizontal: true, vertical: true)
                 .disabled(starPrompt.isStarring || starPrompt.completionState != .none)
+                .animation(.easeInOut(duration: 0.15), value: starPrompt.openFailed)
             }
 
             Button(action: copySystemInfo) {

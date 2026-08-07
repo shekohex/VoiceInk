@@ -3,6 +3,7 @@ import SwiftUI
 struct GitHubStarPromptCard: View {
     let isBusy: Bool
     let completionState: GitHubStarPromptCoordinator.CompletionState
+    let openFailed: Bool
     let onStar: () -> Void
     let onLater: () -> Void
 
@@ -51,11 +52,12 @@ struct GitHubStarPromptCard: View {
                                 .controlSize(.small)
                                 .tint(.secondary)
                         } else {
-                            Image(systemName: "star")
+                            Image(systemName: openFailed ? "exclamationmark.triangle.fill" : "star")
                                 .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(openFailed ? .orange : .primary)
                         }
 
-                        Text("Star on GitHub")
+                        Text(openFailed ? "Couldn't open — try again" : "Star on GitHub")
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundStyle(.primary)
@@ -65,6 +67,7 @@ struct GitHubStarPromptCard: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isLocked)
+                .animation(.easeInOut(duration: 0.15), value: openFailed)
 
                 Button(action: onLater) {
                     Text("Later")

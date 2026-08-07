@@ -27,6 +27,8 @@ final class GitHubStarPromptCoordinator: ObservableObject {
     @Published private(set) var isResolved: Bool
     @Published private(set) var hasDeferredAtLeastOnce: Bool
     @Published private(set) var completionState: CompletionState = .none
+    // Brief, non-blocking feedback when NSWorkspace fails to open the repo URL - card stays up so the user can retry.
+    @Published private(set) var openFailed = false
 
     // Shown in the Dashboard footer only once Later has been clicked - never appears from a toast-only flow.
     var showsFooterStarButton: Bool { hasDeferredAtLeastOnce && (!isResolved || completionState != .none) }
@@ -91,7 +93,10 @@ final class GitHubStarPromptCoordinator: ObservableObject {
 
         if mode == .web {
             // Only mark resolved if the browser actually opened - keeps the retry path alive otherwise.
-            guard NSWorkspace.shared.open(Self.repoURL) else { return }
+            guard NSWorkspace.shared.open(Self.repoURL) else {
+                presentOpenFailure()
+                return
+            }
             UserDefaults.standard.set(true, forKey: Keys.hasStarred)
             isResolved = true
             presentCompletion(.opened)
@@ -122,6 +127,16 @@ final class GitHubStarPromptCoordinator: ObservableObject {
             guard let self else { return }
             self.isVisible = false
             self.completionState = .none
+        }
+    }
+
+    // Flags the open failure briefly so the button doesn't look like a dead click, then clears for retry.
+    private func presentOpenFailure() {
+        openFailed = true
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.completionDisplaySeconds * 1_000_000_000))
+            guard let self else { return }
+            self.openFailed = false
         }
     }
 
