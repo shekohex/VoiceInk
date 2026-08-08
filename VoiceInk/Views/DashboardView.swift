@@ -5,7 +5,7 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var recordingShortcutManager: RecordingShortcutManager
-    @StateObject private var licenseViewModel = LicenseViewModel()
+    @ObservedObject private var licenseViewModel = LicenseViewModel.shared
     @ObservedObject private var starPrompt = GitHubStarPromptCoordinator.shared
 
     var body: some View {
@@ -14,9 +14,6 @@ struct DashboardView: View {
             licenseState: licenseViewModel.licenseState,
             onAddLicenseKey: navigateToLicenseManagement
         )
-        .onReceive(NotificationCenter.default.publisher(for: .licenseStatusChanged)) { _ in
-            licenseViewModel.refreshLicenseState()
-        }
         .overlay(alignment: .bottomTrailing) {
             if starPrompt.isVisible {
                 GitHubStarPromptCard(

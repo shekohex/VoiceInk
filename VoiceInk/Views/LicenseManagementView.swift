@@ -2,10 +2,11 @@ import SwiftUI
 
 struct LicenseManagementView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @StateObject private var licenseViewModel = LicenseViewModel()
+    @ObservedObject private var licenseViewModel = LicenseViewModel.shared
     @State private var showingDeactivateConfirmation = false
     @State private var didCopyLicenseKey = false
     @State private var isShowingReportPanel = false
+    @State private var licenseKeyDraft = ""
 
     private let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
     private let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
@@ -96,11 +97,7 @@ struct LicenseManagementView: View {
     }
 
     private var isLicensed: Bool {
-        if case .licensed = licenseViewModel.licenseState {
-            return true
-        }
-
-        return false
+        licenseViewModel.hasVerifiedLicense
     }
 
     private var inactiveContent: some View {
@@ -170,7 +167,7 @@ struct LicenseManagementView: View {
                 .font(.headline)
 
             HStack(spacing: 10) {
-                TextField("License key", text: $licenseViewModel.licenseKey)
+                TextField("License key", text: $licenseKeyDraft)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                     .textCase(.uppercase)
@@ -183,7 +180,7 @@ struct LicenseManagementView: View {
                     isLoading: licenseViewModel.isValidating,
                     loadingTitle: "Activating"
                 ) {
-                    Task { await licenseViewModel.validateLicense() }
+                    Task { await licenseViewModel.validateLicense(licenseKeyDraft) }
                 }
                 .disabled(licenseViewModel.isValidating)
             }
