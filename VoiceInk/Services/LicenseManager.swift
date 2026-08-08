@@ -137,7 +137,11 @@ final class LicenseManager: LicenseStoring {
         case .value(let value):
             trialStartDate = value
         case .notFound:
-            trialStartDate = nil
+            let startDate = Date()
+            guard storeTrialStartDate(startDate) else {
+                return .unavailable(errSecIO)
+            }
+            trialStartDate = startDate
         case .unavailable(let status):
             return .unavailable(status)
         }
@@ -181,7 +185,11 @@ final class LicenseManager: LicenseStoring {
                 let timeInterval = Double(timestamp)
             else {
                 logger.error("Stored license date is malformed for key: \(identifier, privacy: .public)")
-                return .unavailable(errSecDecode)
+                let resetDate = Date()
+                guard storeDate(resetDate, forKey: identifier) else {
+                    return .unavailable(errSecIO)
+                }
+                return .value(resetDate)
             }
             return .value(Date(timeIntervalSince1970: timeInterval))
         case .notFound:

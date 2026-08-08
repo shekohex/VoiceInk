@@ -60,6 +60,9 @@ struct LicenseManagementView: View {
         } message: {
             Text("This deactivates VoiceInk on this Mac and frees a device on your license.")
         }
+        .onChange(of: licenseViewModel.hasVerifiedLicense) { _, _ in
+            licenseKeyDraft = ""
+        }
     }
 
     private var bottomReportDismissLayer: some View {

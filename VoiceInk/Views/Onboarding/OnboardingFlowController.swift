@@ -244,6 +244,9 @@ final class OnboardingFlowController {
     func activateLicense(_ licenseKey: String) {
         Task { @MainActor in
             await coordinator.licenseViewModel.validateLicense(licenseKey)
+            if coordinator.licenseViewModel.hasVerifiedLicense {
+                coordinator.licenseKeyDraft = ""
+            }
         }
     }
 

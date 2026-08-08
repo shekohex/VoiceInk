@@ -3,7 +3,7 @@ import SwiftUI
 
 struct OnboardingLicenseSetupCard: View {
     @ObservedObject var licenseViewModel: LicenseViewModel
-    @State private var licenseKey = ""
+    @Binding var licenseKey: String
 
     let onPurchase: () -> Void
     let onStartTrial: () -> Void

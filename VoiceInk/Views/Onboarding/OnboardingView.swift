@@ -174,6 +174,7 @@ struct OnboardingView: View {
                 case .license:
                     OnboardingLicenseScreen(
                         licenseViewModel: coordinator.licenseViewModel,
+                        licenseKeyDraft: $coordinator.licenseKeyDraft,
                         onBack: {
                             coordinator.flow.goToPreviousLicenseStep(
                                 isTranscriptionSetupReady: isTranscriptionSetupReady

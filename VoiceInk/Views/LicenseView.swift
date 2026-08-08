@@ -52,6 +52,9 @@ struct LicenseView: View {
             }
         }
         .padding()
+        .onChange(of: licenseViewModel.hasVerifiedLicense) { _, _ in
+            licenseKeyDraft = ""
+        }
     }
 }
 

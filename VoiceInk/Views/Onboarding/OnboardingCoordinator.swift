@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 final class OnboardingCoordinator: ObservableObject {
     let licenseViewModel = LicenseViewModel.shared
+    @Published var licenseKeyDraft = ""
 
     @Published var storedStage: String {
         didSet {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingLicenseScreen: View {
     @ObservedObject var licenseViewModel: LicenseViewModel
+    @Binding var licenseKeyDraft: String
 
     let onBack: () -> Void
     let onPurchase: () -> Void
@@ -24,6 +25,7 @@ struct OnboardingLicenseScreen: View {
         ) {
             OnboardingLicenseSetupCard(
                 licenseViewModel: licenseViewModel,
+                licenseKey: $licenseKeyDraft,
                 onPurchase: onPurchase,
                 onStartTrial: onStartTrial,
                 onActivate: onActivate
