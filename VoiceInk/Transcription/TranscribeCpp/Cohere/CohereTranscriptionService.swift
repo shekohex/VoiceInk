@@ -360,7 +360,7 @@ private extension Array where Element == Float {
         var quietestStart = start
         var lowestEnergy = Double.infinity
         let finalWindowStart = end - windowCount
-        var candidateStarts = Array(stride(from: start, through: finalWindowStart, by: windowCount))
+        var candidateStarts = [Int](stride(from: start, through: finalWindowStart, by: windowCount))
         if candidateStarts.last != finalWindowStart {
             candidateStarts.append(finalWindowStart)
         }
