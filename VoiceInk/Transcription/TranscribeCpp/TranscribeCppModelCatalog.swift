@@ -11,7 +11,6 @@ struct TranscribeCppModelArtifact: Sendable {
     let maximumChunkSeconds: Int
     let boundarySearchSeconds: Int
     let boundaryEnergyWindowSamples: Int
-    let legacyDirectoryName: String?
 
     var downloadURL: URL {
         URL(
@@ -34,13 +33,7 @@ struct TranscribeCppModelArtifact: Sendable {
     }
 
     var installedModelFileURL: URL? {
-        if modelFileIsValid(in: modelDirectory) {
-            return modelFileURL
-        }
-
-        guard let legacyDirectory else { return nil }
-        let legacyModelURL = legacyDirectory.appendingPathComponent(fileName, isDirectory: false)
-        return modelFileIsValid(in: legacyDirectory) ? legacyModelURL : nil
+        modelFileIsValid(in: modelDirectory) ? modelFileURL : nil
     }
 
     func modelFileIsValid(in directory: URL) -> Bool {
@@ -63,14 +56,6 @@ struct TranscribeCppModelArtifact: Sendable {
 
     func removeInstalledFiles() {
         try? FileManager.default.removeItem(at: modelDirectory)
-        if let legacyDirectory {
-            try? FileManager.default.removeItem(at: legacyDirectory)
-        }
-    }
-
-    private var legacyDirectory: URL? {
-        guard let legacyDirectoryName else { return nil }
-        return Self.applicationSupportDirectory.appendingPathComponent(legacyDirectoryName, isDirectory: true)
     }
 
     private static var applicationSupportDirectory: URL {
@@ -90,8 +75,7 @@ enum TranscribeCppModelCatalog {
         architectureHint: "cohere",
         maximumChunkSeconds: 35,
         boundarySearchSeconds: 5,
-        boundaryEnergyWindowSamples: 1_600,
-        legacyDirectoryName: "CohereTranscribe"
+        boundaryEnergyWindowSamples: 1_600
     )
 
     private static let artifactsByModelName = [

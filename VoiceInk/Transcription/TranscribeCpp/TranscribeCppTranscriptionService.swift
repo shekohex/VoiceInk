@@ -1,8 +1,6 @@
 import Foundation
 
 /// Routes transcribe.cpp-backed models to their model-specific service.
-/// Shared provider wiring stays stable as additional transcribe.cpp model
-/// families are added.
 final class TranscribeCppTranscriptionService: TranscriptionService, @unchecked Sendable {
     private let cohereService = CohereTranscriptionService()
 

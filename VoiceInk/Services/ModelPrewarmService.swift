@@ -112,8 +112,7 @@ final class ModelPrewarmService: ObservableObject {
             return false
         }
 
-        // Only prewarm local models. This prepares their runtime before the user
-        // starts a transcription, while each service remains responsible for cleanup.
+        // Prewarm only local runtimes that benefit from retained preparation.
         guard
             let model = ModeRuntimeResolver.transcriptionConfiguration(
                 transcriptionModelManager: transcriptionModelManager
@@ -123,7 +122,7 @@ final class ModelPrewarmService: ObservableObject {
         }
 
         switch model.provider {
-        case .whisper, .fluidAudio, .transcribeCpp:
+        case .whisper, .fluidAudio:
             return true
         default:
             logger.notice("Skipping prewarm - cloud models don't need it")

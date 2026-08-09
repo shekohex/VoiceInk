@@ -22,11 +22,13 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
     }
 
     private static let backendInitializationLock = NSLock()
+    private static let modelInitializationLock = NSLock()
     private static var backendsInitialized = false
 
     private let stateLock = NSLock()
     private var loadedState: LoadedState?
     private var loadingState: LoadingState?
+    private var activeTranscriptionCount = 0
     private var notificationObservers: [NSObjectProtocol] = []
     private var memoryPressureSource: DispatchSourceMemoryPressure?
     private let audioConverter = AudioConverter()
@@ -81,7 +83,8 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
     }
 
     func loadModel(for model: TranscribeCppModel) async throws {
-        _ = try await getOrLoadModel(for: model)
+        let artifact = try resolveArtifact(for: model)
+        _ = try await getOrLoadModel(for: model, artifact: artifact)
     }
 
     func transcribe(
@@ -96,17 +99,11 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
                 userInfo: [NSLocalizedDescriptionKey: "Unsupported transcription model"]
             )
         }
-        let artifact = TranscribeCppModelCatalog.cohereTranscribe
-        guard transcribeCppModel.name == artifact.modelName else {
-            throw NSError(
-                domain: "CohereTranscriptionService",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "Unsupported Cohere transcription model"]
-            )
-        }
+        let artifact = try resolveArtifact(for: transcribeCppModel)
 
-        let nativeModel = try await getOrLoadModel(for: transcribeCppModel)
-        defer { unloadModel(named: transcribeCppModel.name) }
+        let nativeModel = try await getOrLoadModel(for: transcribeCppModel, artifact: artifact)
+        retainModel(nativeModel, named: transcribeCppModel.name)
+        defer { releaseModel(named: transcribeCppModel.name) }
 
         let samples = try audioConverter.resampleAudioFile(audioURL)
         let language = selectedLanguage(context.language, for: transcribeCppModel)
@@ -142,28 +139,13 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
     }
 
     func unloadModel() {
-        let didUnload = stateLock.withLock {
-            let hadRuntime = loadedState != nil || loadingState != nil
-            loadingState?.task.cancel()
-            loadingState = nil
-            loadedState = nil
-            return hadRuntime
-        }
-        if didUnload {
-            logger.notice("transcribe.cpp runtime unloaded")
-        }
+        unloadModel { _ in true }
     }
 
-    private func getOrLoadModel(for model: TranscribeCppModel) async throws -> Model {
-        let artifact = TranscribeCppModelCatalog.cohereTranscribe
-        guard model.name == artifact.modelName else {
-            throw NSError(
-                domain: "CohereTranscriptionService",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "Unsupported Cohere transcription model"]
-            )
-        }
-
+    private func getOrLoadModel(
+        for model: TranscribeCppModel,
+        artifact: TranscribeCppModelArtifact
+    ) async throws -> Model {
         let resolvedState: LoadResolution = stateLock.withLock {
             if let loadedState, loadedState.modelName == model.name {
                 return .loaded(loadedState.model)
@@ -179,6 +161,7 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
             let loadID = UUID()
             let backend = backend
             let task = Task.detached(priority: .userInitiated) {
+                try Task.checkCancellation()
                 guard let modelURL = artifact.installedModelFileURL else {
                     throw CocoaError(.fileNoSuchFile)
                 }
@@ -188,10 +171,16 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
                     throw TranscribeError.backend("The requested transcribe.cpp backend is unavailable")
                 }
 
-                return try Model(
-                    path: modelURL.path,
-                    options: ModelOptions(backend: backend)
-                )
+                // Serialize non-cancellable native construction to prevent overlapping model loads.
+                return try Self.modelInitializationLock.withLock {
+                    try Task.checkCancellation()
+                    let loadedModel = try Model(
+                        path: modelURL.path,
+                        options: ModelOptions(backend: backend)
+                    )
+                    try Task.checkCancellation()
+                    return loadedModel
+                }
             }
             let state = LoadingState(id: loadID, modelName: model.name, task: task)
             loadingState = state
@@ -245,8 +234,19 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
     }
 
     private func unloadModel(named modelName: String) {
+        unloadModel { $0 == modelName }
+    }
+
+    private func unloadModel(unlessSelectedModelIs modelName: String) {
+        unloadModel { $0 != modelName }
+    }
+
+    private func unloadModel(where shouldUnload: (String) -> Bool) {
         let didUnload = stateLock.withLock {
-            guard loadedState?.modelName == modelName || loadingState?.modelName == modelName else {
+            guard let activeModelName = loadedState?.modelName ?? loadingState?.modelName,
+                shouldUnload(activeModelName),
+                activeTranscriptionCount == 0
+            else {
                 return false
             }
             loadingState?.task.cancel()
@@ -259,11 +259,25 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
         }
     }
 
-    private func unloadModel(unlessSelectedModelIs modelName: String) {
+    private func retainModel(_ model: Model, named modelName: String) {
+        stateLock.withLock {
+            // Restore an acquired model after a racing unload and cancel its replacement load.
+            loadingState?.task.cancel()
+            loadingState = nil
+            loadedState = LoadedState(modelName: modelName, model: model)
+            activeTranscriptionCount += 1
+        }
+    }
+
+    private func releaseModel(named modelName: String) {
         let didUnload = stateLock.withLock {
-            let hasDifferentLoadedModel = loadedState != nil && loadedState?.modelName != modelName
-            let hasDifferentLoadingModel = loadingState != nil && loadingState?.modelName != modelName
-            guard hasDifferentLoadedModel || hasDifferentLoadingModel else { return false }
+            guard activeTranscriptionCount > 0 else { return false }
+            activeTranscriptionCount -= 1
+            guard activeTranscriptionCount == 0,
+                loadedState?.modelName == modelName || loadingState?.modelName == modelName
+            else {
+                return false
+            }
             loadingState?.task.cancel()
             loadingState = nil
             loadedState = nil
@@ -272,6 +286,19 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
         if didUnload {
             logger.notice("transcribe.cpp runtime unloaded")
         }
+    }
+
+    private func resolveArtifact(for model: TranscribeCppModel) throws -> TranscribeCppModelArtifact {
+        guard let artifact = TranscribeCppModelCatalog.artifact(for: model.name),
+            artifact.modelName == TranscribeCppModelCatalog.cohereTranscribe.modelName
+        else {
+            throw NSError(
+                domain: "CohereTranscriptionService",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported Cohere transcription model"]
+            )
+        }
+        return artifact
     }
 
     private func selectedLanguage(_ language: String?, for model: TranscribeCppModel) -> String {
@@ -293,8 +320,7 @@ final class CohereTranscriptionService: TranscriptionService, @unchecked Sendabl
 }
 
 private extension Array where Element == Float {
-    /// Matches Cohere's reference long-form splitter. The final part of each
-    /// possible 35-second chunk is a boundary-search region, not audio overlap.
+    /// Matches Cohere's long-form splitter, using the chunk tail for boundary search rather than overlap.
     func energyAwareChunks(
         maximumCount: Int,
         boundarySearchCount: Int,
@@ -334,8 +360,12 @@ private extension Array where Element == Float {
         var quietestStart = start
         var lowestEnergy = Double.infinity
         let finalWindowStart = end - windowCount
+        var candidateStarts = Array(stride(from: start, through: finalWindowStart, by: windowCount))
+        if candidateStarts.last != finalWindowStart {
+            candidateStarts.append(finalWindowStart)
+        }
 
-        for windowStart in stride(from: start, to: finalWindowStart, by: windowCount) {
+        for windowStart in candidateStarts {
             var squaredSampleSum = 0.0
             for sample in self[windowStart..<(windowStart + windowCount)] {
                 let value = Double(sample)
