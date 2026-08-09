@@ -3562,11 +3562,28 @@
       }
     },
     "Auto-check Updates" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Updates automatisch prüfen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动检查更新"
+          }
+        }
+      }
+    },
+    "Automatically Check for Updates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch nach Updates suchen"
           }
         },
         "zh-Hans" : {
@@ -12076,6 +12093,22 @@
         }
       }
     },
+    "Open the VoiceInk %@ update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk-Update %@ öffnen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 VoiceInk %@ 更新"
+          }
+        }
+      }
+    },
     "OpenAI Compatible" : {
       "localizations" : {
         "de" : {
@@ -12088,6 +12121,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenAI 兼容"
+          }
+        }
+      }
+    },
+    "Opens the update window" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet das Updatefenster"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开更新窗口"
           }
         }
       }
@@ -17552,6 +17601,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不支持的提供商"
+          }
+        }
+      }
+    },
+    "Update Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update verfügbar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有可用更新"
           }
         }
       }
