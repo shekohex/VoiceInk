@@ -9,13 +9,13 @@ struct TranscribeCppDownloadStatus: Sendable {
     let isIndeterminate: Bool
 }
 
-private final class TranscribeCppDownloadOperation: @unchecked Sendable {
+private final class TranscribeCppDownloadOperation: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let destinationURL: URL
     private let expectedByteCount: Int64
     private let progressHandler: @Sendable (Double) -> Void
     private let lock = NSLock()
+    private var session: URLSession?
     private var task: URLSessionDownloadTask?
-    private var observation: NSKeyValueObservation?
     private var continuation: CheckedContinuation<HTTPURLResponse, Error>?
     private var isCancelled = false
     private var isCompleted = false
@@ -33,22 +33,13 @@ private final class TranscribeCppDownloadOperation: @unchecked Sendable {
     func start(from sourceURL: URL) async throws -> HTTPURLResponse {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                let task = URLSession.shared.downloadTask(with: sourceURL) { [weak self] temporaryURL, response, error in
-                    self?.finishDownload(temporaryURL: temporaryURL, response: response, error: error)
-                }
-                let observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-                    guard let self else { return }
-                    let reportedTotal = progress.totalUnitCount
-                    let total = reportedTotal > 0 ? reportedTotal : expectedByteCount
-                    guard total > 0 else { return }
-                    let fraction = Double(progress.completedUnitCount) / Double(total)
-                    progressHandler(min(max(fraction, 0), 1))
-                }
+                let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+                let task = session.downloadTask(with: sourceURL)
 
                 let shouldStart = lock.withLock {
                     guard !isCancelled, !isCompleted else { return false }
+                    self.session = session
                     self.task = task
-                    self.observation = observation
                     self.continuation = continuation
                     return true
                 }
@@ -56,8 +47,7 @@ private final class TranscribeCppDownloadOperation: @unchecked Sendable {
                 if shouldStart {
                     task.resume()
                 } else {
-                    observation.invalidate()
-                    task.cancel()
+                    session.invalidateAndCancel()
                     continuation.resume(throwing: CancellationError())
                 }
             }
@@ -66,15 +56,29 @@ private final class TranscribeCppDownloadOperation: @unchecked Sendable {
         }
     }
 
-    private func finishDownload(temporaryURL: URL?, response: URLResponse?, error: Error?) {
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        let total = expectedByteCount > 0 ? expectedByteCount : totalBytesExpectedToWrite
+        guard total > 0 else { return }
+
+        let fraction = Double(totalBytesWritten) / Double(total)
+        progressHandler(min(max(fraction, 0), 1))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo temporaryURL: URL
+    ) {
         let result: Result<HTTPURLResponse, Error>
 
-        if let error {
-            result = .failure(error)
-        } else if
-            let httpResponse = response as? HTTPURLResponse,
-            (200...299).contains(httpResponse.statusCode),
-            let temporaryURL
+        if let httpResponse = downloadTask.response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode)
         {
             do {
                 try? FileManager.default.removeItem(at: destinationURL)
@@ -90,31 +94,41 @@ private final class TranscribeCppDownloadOperation: @unchecked Sendable {
         finish(with: result)
     }
 
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        if let error {
+            finish(with: .failure(error))
+        }
+    }
+
     private func finish(with result: Result<HTTPURLResponse, Error>) {
         let resolution = lock.withLock {
             guard !isCompleted else {
-                return (nil as CheckedContinuation<HTTPURLResponse, Error>?, nil as NSKeyValueObservation?)
+                return (nil as CheckedContinuation<HTTPURLResponse, Error>?, nil as URLSession?)
             }
 
             isCompleted = true
             let continuation = self.continuation
-            let observation = self.observation
+            let session = self.session
             self.continuation = nil
-            self.observation = nil
+            self.session = nil
             task = nil
-            return (continuation, observation)
+            return (continuation, session)
         }
 
-        resolution.1?.invalidate()
+        resolution.1?.finishTasksAndInvalidate()
         resolution.0?.resume(with: result)
     }
 
     private func cancel() {
-        let task = lock.withLock {
+        let session = lock.withLock {
             isCancelled = true
-            return self.task
+            return self.session
         }
-        task?.cancel()
+        session?.invalidateAndCancel()
     }
 }
 
@@ -123,6 +137,7 @@ final class TranscribeCppModelManager: ObservableObject {
     static let shared = TranscribeCppModelManager()
 
     @Published private var downloadStatuses: [String: TranscribeCppDownloadStatus] = [:]
+    @Published private var modelStateRevision = 0
 
     var onModelDeleted: ((String) -> Void)?
     var onModelsChanged: (() -> Void)?
@@ -245,6 +260,7 @@ final class TranscribeCppModelManager: ObservableObject {
     func deleteModel(_ model: TranscribeCppModel) {
         guard let artifact = TranscribeCppModelCatalog.artifact(for: model.name) else { return }
         artifact.removeInstalledFiles()
+        modelStateRevision += 1
         NotificationCenter.default.post(
             name: .transcribeCppModelDeleted,
             object: nil,
