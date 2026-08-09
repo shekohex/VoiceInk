@@ -79,8 +79,8 @@ enum TranscriptionModelRegistry {
                 displayName: "Cohere Transcribe",
                 description: "Accurate multilingual transcription that runs privately on your Mac",
                 size: "1.56 GB",
-                speed: 0.98,
-                accuracy: 0.99,
+                speed: 0.75,
+                accuracy: 0.95,
                 ramUsage: 2.5,
                 publisher: "Cohere",
                 supportedLanguages: LanguageDictionary.cohereTranscribe
