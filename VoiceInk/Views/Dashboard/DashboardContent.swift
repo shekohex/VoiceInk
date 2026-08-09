@@ -31,6 +31,7 @@ struct DashboardContent: View {
     @State private var isInsightsViewPresented = false
     @State private var selectedInsightPeriod: DashboardInsightPeriod = .allTime
     @State private var isAccessibilityEnabled = AXIsProcessTrusted()
+    @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @ObservedObject private var modeManager = ModeManager.shared
     @ObservedObject private var starPrompt = GitHubStarPromptCoordinator.shared
     @State private var isSystemInfoCopied = false
@@ -92,7 +93,10 @@ struct DashboardContent: View {
         .task {
             await scheduleDashboardStatsRefresh(allowSkipWhenFresh: hasLoadedStatsSnapshot)
         }
-        .onAppear(perform: refreshAccessibilityStatus)
+        .onAppear {
+            refreshAccessibilityStatus()
+            updaterViewModel.checkForUpdatesIfDue()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibilityStatus()
         }
@@ -574,6 +578,24 @@ struct DashboardContent: View {
                 .animation(.easeInOut(duration: 0.15), value: starPrompt.openFailed)
             }
 
+            if let availableUpdate = updaterViewModel.availableUpdate {
+                Button(action: updaterViewModel.checkForUpdates) {
+                    footerActionLabel(
+                        icon: "arrow.down.circle.fill",
+                        title: "Update Available",
+                        color: AppTheme.Status.infoStrong
+                    )
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: true)
+                .disabled(!updaterViewModel.canCheckForUpdates)
+                .help("Open the VoiceInk \(availableUpdate.displayVersion) update")
+                .accessibilityLabel("Update Available")
+                .accessibilityValue(Text(verbatim: availableUpdate.displayVersion))
+                .accessibilityHint("Opens the update window")
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
             Button(action: copySystemInfo) {
                 footerActionLabel(
                     icon: isSystemInfoCopied ? "checkmark" : "doc.on.doc",
@@ -585,6 +607,7 @@ struct DashboardContent: View {
             .fixedSize(horizontal: true, vertical: true)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSystemInfoCopied)
         }
+        .animation(.easeOut(duration: 0.2), value: updaterViewModel.availableUpdate)
     }
 
     @ViewBuilder

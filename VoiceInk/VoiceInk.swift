@@ -2,7 +2,6 @@ import AppIntents
 import AppKit
 import FluidAudio
 import OSLog
-import Sparkle
 import SwiftData
 import SwiftUI
 
@@ -460,44 +459,6 @@ private struct MainWindowRequestBridge: View {
                     WindowManager.shared.showMainWindow()
                 }
             }
-    }
-}
-
-class UpdaterViewModel: ObservableObject {
-    private let updaterController: SPUStandardUpdaterController
-
-    @Published var canCheckForUpdates = false
-    @Published var automaticallyChecksForUpdates = false
-
-    init() {
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-
-        automaticallyChecksForUpdates = updaterController.updater.automaticallyChecksForUpdates
-
-        updaterController.updater.publisher(for: \.canCheckForUpdates)
-            .assign(to: &$canCheckForUpdates)
-
-        updaterController.updater.publisher(for: \.automaticallyChecksForUpdates)
-            .assign(to: &$automaticallyChecksForUpdates)
-    }
-
-    func setAutomaticallyChecksForUpdates(_ value: Bool) {
-        updaterController.updater.automaticallyChecksForUpdates = value
-    }
-
-    func checkForUpdates() {
-        // This is for manual checks - will show UI
-        updaterController.checkForUpdates(nil)
-    }
-}
-
-struct CheckForUpdatesView: View {
-    @ObservedObject var updaterViewModel: UpdaterViewModel
-
-    var body: some View {
-        Button("Check for Updates…", action: updaterViewModel.checkForUpdates)
-            .disabled(!updaterViewModel.canCheckForUpdates)
     }
 }
 
