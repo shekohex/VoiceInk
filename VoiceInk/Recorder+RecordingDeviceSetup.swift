@@ -60,7 +60,7 @@ extension Recorder {
         guard let request = notification.object as? RecordingDeviceChangeRequest else { return }
         guard let fallbackDeviceID = request.fallbackDeviceID else {
             deviceManager.recordingDeviceChangeFinished()
-            showNoFallbackNotification()
+            showNoFallbackNotification(reason: request.reason)
             return
         }
         guard let recorder else {
@@ -102,12 +102,15 @@ extension Recorder {
         }
     }
 
-    private func showNoFallbackNotification() {
+    private func showNoFallbackNotification(reason: RecordingDeviceChangeReason) {
+        let presentation = AudioInputFailurePresentation.noUsableMicrophone(
+            builtInBlockedByClosedLid: reason == .closedLid
+        )
         NotificationManager.shared.showNotification(
-            title: String(localized: "No usable microphone is available. Choose a microphone in Audio Settings."),
+            title: presentation.title,
             type: .error,
             duration: 7.0,
-            actionButton: (String(localized: "Audio Settings"), AudioSetupNavigator.openAudioSettings)
+            actionButton: (presentation.actionLabel, presentation.action)
         )
     }
 

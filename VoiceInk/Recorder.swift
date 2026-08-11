@@ -56,6 +56,7 @@ class Recorder: NSObject, ObservableObject {
     func startRecording(toOutputFile url: URL) async throws {
         var resolution = deviceManager.resolveCurrentRecordingDevice()
         guard var deviceID = resolution.deviceID else {
+            onAudioChunk = nil
             throw RecorderError.noUsableMicrophone(
                 builtInBlockedByClosedLid: resolution.builtInBlockedByClosedLid
             )

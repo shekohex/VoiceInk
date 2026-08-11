@@ -11620,6 +11620,22 @@
         }
       }
     },
+    "No usable microphone is available. Open the lid or connect an external microphone." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es ist kein verwendbares Mikrofon verfügbar. Öffne den Deckel oder schließe ein externes Mikrofon an."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可用的麦克风。请打开上盖或连接外接麦克风。"
+          }
+        }
+      }
+    },
     "No Websites" : {
       "localizations" : {
         "de" : {
