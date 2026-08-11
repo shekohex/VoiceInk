@@ -3519,6 +3519,22 @@
         }
       }
     },
+    "Audio Settings" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audioeinstellungen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频设置"
+          }
+        }
+      }
+    },
     "AudioUnit not initialized" : {
       "localizations" : {
         "de" : {
@@ -11588,6 +11604,22 @@
         }
       }
     },
+    "No usable microphone is available. Choose a microphone in Audio Settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es ist kein verwendbares Mikrofon verfügbar. Wähle unter „Audioeinstellungen“ ein Mikrofon aus."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可用的麦克风。请在“音频设置”中选择一个麦克风。"
+          }
+        }
+      }
+    },
     "No Websites" : {
       "localizations" : {
         "de" : {
@@ -13282,6 +13314,7 @@
       }
     },
     "Recording Failed: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -18212,6 +18245,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "VoiceInk 可以根据你正在使用的 App 和你配置的规则选择合适的模式。"
+          }
+        }
+      }
+    },
+    "VoiceInk could not switch to another microphone." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk konnte nicht zu einem anderen Mikrofon wechseln."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk 无法切换到其他麦克风。"
           }
         }
       }
