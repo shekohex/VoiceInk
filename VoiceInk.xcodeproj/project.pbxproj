@@ -857,14 +857,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		E1C0A0002FA8000000000001 /* XCRemoteSwiftPackageReference "Transcribe-cpp-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Beingpax/Transcribe-cpp-swift.git";
-			requirement = {
-				kind = exactVersion;
-				version = "0.2.0-dev.856d7c1";
-			};
-		};
 		E1342C1D2EB4844800CED8A2 /* XCRemoteSwiftPackageReference "swift-atomics" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-atomics.git";
@@ -887,6 +879,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.6.4;
+			};
+		};
+		E1C0A0002FA8000000000001 /* XCRemoteSwiftPackageReference "Transcribe-cpp-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Beingpax/Transcribe-cpp-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = "0.2.0-dev.856d7c1";
 			};
 		};
 		E1D7EF972E35E16C00640029 /* XCRemoteSwiftPackageReference "mediaremote-adapter" */ = {
@@ -958,11 +958,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		E1C0A0012FA8000000000001 /* TranscribeCpp */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = E1C0A0002FA8000000000001 /* XCRemoteSwiftPackageReference "Transcribe-cpp-swift" */;
-			productName = TranscribeCpp;
-		};
 		E1342C1E2EB4844800CED8A2 /* Atomics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E1342C1D2EB4844800CED8A2 /* XCRemoteSwiftPackageReference "swift-atomics" */;
@@ -977,6 +972,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E1ADD45D2CC544F100303ECB /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		E1C0A0012FA8000000000001 /* TranscribeCpp */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1C0A0002FA8000000000001 /* XCRemoteSwiftPackageReference "Transcribe-cpp-swift" */;
+			productName = TranscribeCpp;
 		};
 		E1D7EF982E35E16C00640029 /* MediaRemoteAdapter */ = {
 			isa = XCSwiftPackageProductDependency;
