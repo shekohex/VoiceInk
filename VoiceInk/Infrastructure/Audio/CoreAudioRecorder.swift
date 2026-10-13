@@ -232,10 +232,33 @@ final class CoreAudioRecorder: @unchecked Sendable {
         drainAudioProcessingQueue()
         logDroppedInputBufferCounters(context: "stop")
 
+        let shouldInvalidatePreparation = capturedTooLittleAudio()
         closeOutputFile()
         recordingURL = nil
 
+        // Rebuild the input next time if too little audio was captured.
+        if shouldInvalidatePreparation {
+            logger.notice(
+                "Recording captured less than 150 ms of audio; discarding the prepared audio input"
+            )
+            invalidatePreparation()
+        }
+
         resetMeters()
+    }
+
+    /// Check after writes finish, before closing the file.
+    private func capturedTooLittleAudio() -> Bool {
+        guard let audioFile, outputFormat.mSampleRate > 0 else { return false }
+
+        var frameCount: Int64 = 0
+        var size = UInt32(MemoryLayout<Int64>.size)
+        guard ExtAudioFileGetProperty(
+            audioFile, kExtAudioFileProperty_FileLengthFrames, &size, &frameCount
+        ) == noErr, frameCount >= 0 else { return false }
+
+        // Use audio duration, not file size.
+        return Double(frameCount) / outputFormat.mSampleRate < 0.15
     }
 
     /// Releases the prepared AUHAL and buffers. Use for app shutdown or hard recovery.
