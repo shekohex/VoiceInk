@@ -385,6 +385,12 @@ class VoiceInkEngine: NSObject, ObservableObject {
                                         }
                                     }
                                 } else if let fluidAudioModel = currentModel as? FluidAudioModel {
+                                    // Unified streaming does not need the offline encoder.
+                                    if transcriptionConfiguration.isRealtimeEnabled,
+                                        FluidAudioModelManager.isParakeetUnifiedModel(named: fluidAudioModel.name)
+                                    {
+                                        return
+                                    }
                                     try? await self.serviceRegistry.fluidAudioTranscriptionService.loadModel(
                                         for: fluidAudioModel)
                                 } else if let transcribeCppModel = currentModel as? TranscribeCppModel {
