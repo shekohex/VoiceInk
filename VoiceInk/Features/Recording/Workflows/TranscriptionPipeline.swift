@@ -59,7 +59,6 @@ class TranscriptionPipeline {
         recordingContextSnapshot: @escaping () async -> RecordingContextSnapshot? = { nil },
         outputConfiguration: @escaping () -> OutputRuntimeConfiguration,
         sendAfterPaste: Bool = false,
-        onPrepareDelivery: () async -> Bool,
         onStateChange: @escaping (RecordingState) -> Void,
         shouldCancel: () -> Bool,
         onCancel: @escaping () async -> Void,
@@ -273,14 +272,6 @@ class TranscriptionPipeline {
         if shouldCancel() {
             await finishCanceledTranscription()
             return
-        }
-
-        if !assistant.isFollowUp {
-            let canDeliver = await onPrepareDelivery()
-            if !canDeliver || shouldCancel() {
-                await finishCanceledTranscription()
-                return
-            }
         }
 
         await delivery.deliver(
