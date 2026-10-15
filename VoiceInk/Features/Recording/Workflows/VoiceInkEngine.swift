@@ -548,6 +548,7 @@ class VoiceInkEngine: NSObject, ObservableObject {
         let session = currentSession
         let transcriptionID = transcription.id
         activePipelineTranscriptionID = transcriptionID
+        var didCleanUpResources = false
 
         await pipeline.run(
             transcription: transcription,
@@ -581,6 +582,12 @@ class VoiceInkEngine: NSObject, ObservableObject {
                 ModeRuntimeResolver.outputConfiguration()
             },
             sendAfterPaste: sendAfterPaste,
+            onPrepareDelivery: { [weak self] in
+                guard let self, self.activePipelineTranscriptionID == transcriptionID else { return false }
+                await self.cleanupResources()
+                didCleanUpResources = true
+                return self.activePipelineTranscriptionID == transcriptionID
+            },
             onStateChange: { [weak self] state in
                 guard let self, self.activePipelineTranscriptionID == transcriptionID else { return }
                 self.recordingState = state
@@ -631,7 +638,9 @@ class VoiceInkEngine: NSObject, ObservableObject {
         }
 
         guard activePipelineTranscriptionID == transcriptionID else { return }
-        await cleanupResources()
+        if !didCleanUpResources {
+            await cleanupResources()
+        }
         guard activePipelineTranscriptionID == transcriptionID else { return }
 
         activePipelineTranscriptionID = nil

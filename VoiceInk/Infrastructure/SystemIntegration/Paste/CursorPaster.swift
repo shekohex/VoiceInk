@@ -145,9 +145,12 @@ class CursorPaster {
         sessionID: String,
         on pasteboard: NSPasteboard
     ) -> Task<Void, Never> {
-        let delay = max(
-            UserDefaults.standard.double(forKey: "clipboardRestoreDelay"),
-            minimumClipboardRestoreDelay
+        let delay = min(
+            max(
+                UserDefaults.standard.double(forKey: "clipboardRestoreDelay"),
+                minimumClipboardRestoreDelay
+            ),
+            5.0
         )
         return Task { @MainActor in
             await wait(delay)
