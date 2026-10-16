@@ -172,7 +172,7 @@ struct SettingsView: View {
                     HStack(spacing: 4) {
                         Text("Paste Method")
                         InfoTip(
-                            "Default uses Cmd+V. AppleScript offers an alternative paste shortcut. Direct Typing enters text without using the clipboard or changing your keyboard layout. Some editors may not support it."
+                            "Default uses Cmd+V. AppleScript offers an alternative way to send Cmd+V. Direct Typing enters text without using the clipboard. Some editors may not support it."
                         )
                     }
                 }

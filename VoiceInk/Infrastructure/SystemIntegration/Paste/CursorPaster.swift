@@ -152,7 +152,7 @@ class CursorPaster {
             case .notPosted: result = .commandNotPosted
             case .partiallyPosted: result = .commandPartiallyPosted
             }
-            if !result.didPostPasteCommand {
+            if !text.isEmpty && !result.didPostPasteCommand {
                 NotificationManager.shared.showNotification(
                     title: String(localized: "Direct Typing stopped. Check the text field before trying again. Your transcription is available in History."),
                     type: .warning

@@ -9260,25 +9260,25 @@
         }
       }
     },
-    "Default uses Cmd+V. AppleScript offers an alternative paste shortcut. Direct Typing enters text without using the clipboard or changing your keyboard layout. Some editors may not support it." : {
+    "Default uses Cmd+V. AppleScript offers an alternative way to send Cmd+V. Direct Typing enters text without using the clipboard. Some editors may not support it." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Standard verwendet Cmd+V. AppleScript bietet eine alternative Tastenkombination zum Einfügen. Direkte Texteingabe fügt Text ohne Zwischenablage und ohne Änderung deines Tastaturlayouts ein. Manche Editoren unterstützen dies möglicherweise nicht."
+            "value" : "Standard verwendet Cmd+V. AppleScript bietet eine alternative Möglichkeit, Cmd+V zu senden. Direkte Texteingabe fügt Text ohne Zwischenablage ein. Manche Editoren unterstützen dies möglicherweise nicht."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La méthode Par défaut utilise Cmd+V. AppleScript offre une autre façon d’envoyer le raccourci de collage. La saisie directe entre le texte sans utiliser le presse-papiers ni changer la disposition du clavier. Certains éditeurs peuvent ne pas la prendre en charge."
+            "value" : "La méthode Par défaut utilise Cmd+V. AppleScript offre une autre façon d’envoyer Cmd+V. La saisie directe entre le texte sans utiliser le presse-papiers. Certains éditeurs peuvent ne pas la prendre en charge."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "默认方式使用 Cmd+V。AppleScript 提供另一种发送粘贴快捷键的方式。直接输入无需使用剪贴板或更改键盘布局。部分编辑器可能不支持。"
+            "value" : "默认方式使用 Cmd+V。AppleScript 提供另一种发送 Cmd+V 的方式。直接输入无需使用剪贴板。部分编辑器可能不支持。"
           }
         }
       }
