@@ -29,6 +29,8 @@ class AudioDeviceManager: ObservableObject {
     @Published var recordingDeviceSession = RecordingDeviceSession()
     var clamshellStateMonitor: ClamshellStateMonitor?
     private var defaultInputDeviceListener: AudioObjectPropertyListenerBlock?
+    private let channelDiscoveryQueue = DispatchQueue(
+        label: "com.prakashjoshipax.voiceink.audioChannelDiscovery", qos: .userInitiated)
 
     var isRecordingActive: Bool { recordingDeviceSession.isActive }
     var activeRecordingDeviceID: AudioDeviceID? { recordingDeviceSession.activeDeviceID }
@@ -172,24 +174,26 @@ class AudioDeviceManager: ObservableObject {
             }
             return (id: deviceID, uid: uid, name: name)
         }
-        let inputChannels = Dictionary(uniqueKeysWithValues: devices.map {
-            ($0.id, AudioDeviceConfiguration.inputChannels(deviceID: $0.id))
-        })
+        channelDiscoveryQueue.async { [weak self] in
+            let inputChannels = Dictionary(uniqueKeysWithValues: devices.map {
+                ($0.id, AudioDeviceConfiguration.inputChannels(deviceID: $0.id))
+            })
 
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.availableDevices = devices.map { ($0.id, $0.uid, $0.name) }
-            self.inputChannelsByDevice = inputChannels
-            if let currentID = self.selectedDeviceID, !devices.contains(where: { $0.id == currentID }) {
-                if !self.isRecordingActive {
-                    if self.inputMode == .prioritized {
-                        self.selectHighestPriorityAvailableDevice()
-                    } else {
-                        self.fallbackToDefaultDevice()
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.availableDevices = devices.map { ($0.id, $0.uid, $0.name) }
+                self.inputChannelsByDevice = inputChannels
+                if let currentID = self.selectedDeviceID, !devices.contains(where: { $0.id == currentID }) {
+                    if !self.isRecordingActive {
+                        if self.inputMode == .prioritized {
+                            self.selectHighestPriorityAvailableDevice()
+                        } else {
+                            self.fallbackToDefaultDevice()
+                        }
                     }
                 }
+                completion?()
             }
-            completion?()
         }
     }
 
@@ -201,7 +205,8 @@ class AudioDeviceManager: ObservableObject {
     }
 
     func selectedInputChannels(for deviceID: AudioDeviceID) -> [UInt32]? {
-        guard let uid = availableDevices.first(where: { $0.id == deviceID })?.uid else { return nil }
+        guard !isInternalMicrophone(deviceID),
+              let uid = availableDevices.first(where: { $0.id == deviceID })?.uid else { return nil }
         return inputChannelsByDeviceUID[uid]
     }
 
