@@ -29527,6 +29527,28 @@
         }
       }
     },
+    "VoiceInk needs to restart macOS audio. Sound in all apps will cut out for a moment." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk muss das macOS-Audio neu starten. Der Ton in allen Apps setzt kurz aus."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk doit redémarrer l’audio de macOS. Le son de toutes les apps sera coupé un instant."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VoiceInk 需要重启 macOS 音频。所有应用的声音会短暂中断。"
+          }
+        }
+      }
+    },
     "VoiceInk Pro" : {
       "localizations" : {
         "de" : {
